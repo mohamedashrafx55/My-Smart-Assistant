@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>My Smart Assistant</title>
+<meta name="theme-color" content="#222222">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="splash" aria-hidden="true">
+  <div class="splash-glow"></div>
+  <div class="splash-beams"></div>
+  <div class="splash-parts"><i style="--x:8%;--d:0.20s;--s:3;--t:6.5s"></i><i style="--x:17%;--d:1.10s;--s:2;--t:7.5s"></i><i style="--x:26%;--d:0.60s;--s:4;--t:6.0s"></i><i style="--x:34%;--d:1.60s;--s:2;--t:8.0s"></i><i style="--x:43%;--d:0.30s;--s:3;--t:7.0s"></i><i style="--x:52%;--d:1.30s;--s:2;--t:6.5s"></i><i style="--x:61%;--d:0.80s;--s:4;--t:7.5s"></i><i style="--x:69%;--d:1.80s;--s:2;--t:6.0s"></i><i style="--x:77%;--d:0.50s;--s:3;--t:8.0s"></i><i style="--x:85%;--d:1.20s;--s:2;--t:7.0s"></i><i style="--x:92%;--d:0.10s;--s:3;--t:6.5s"></i><i style="--x:13%;--d:2.00s;--s:2;--t:7.0s"></i><i style="--x:57%;--d:2.20s;--s:3;--t:6.0s"></i><i style="--x:73%;--d:1.50s;--s:2;--t:8.0s"></i></div>
+  <div class="splash-grain"></div>
+  <div class="splash-stage">
+    <div class="splash-logo">
+      <i class="splash-wave w1"></i><i class="splash-wave w2"></i><i class="splash-wave w3"></i>
+      <div class="splash-orbit"><i></i><i></i><i></i></div>
+      <svg class="splash-ring" viewBox="0 0 200 200" aria-hidden="true"><circle class="r1" cx="100" cy="100" r="96"/><circle class="r2" cx="100" cy="100" r="96"/></svg>
+      <div class="splash-mark">
+        <img class="splash-mark-img" src="assets/img-0fb45762.png" alt="">
+        <div class="splash-shine"></div>
+      </div>
+    </div>
+    <img class="splash-text" src="assets/img-94fe3f77.png" alt="">
+    <div class="splash-rule"><i></i></div>
+    <div class="splash-title" data-t="MY SMART ASSISTANT">MY SMART ASSISTANT</div>
+    <div class="splash-hi" id="splashHi"></div>
+    <div class="splash-bar"><i></i></div>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header id="topbar">
+    <button id="btnSettings" class="icon-btn gear" data-i18n-aria="settings" data-action="open-settings"></button>
+    <div class="brand">
+      <img class="brand-mark logo-on-dark" src="assets/img-0fb45762.png" alt="">
+      <img class="brand-mark logo-on-light" src="assets/img-e1e7e6d4.png" alt="">
+      <span class="brand-name">My Smart Assistant</span>
+    </div>
+    <div class="top-right">
+      <button id="btnHome" class="btn sm" hidden></button>
+      <span id="clock"></span>
+      <button id="btnTheme" class="icon-btn" data-action="toggle-theme" data-i18n-aria="theme"></button>
+    </div>
+  </header>
+  <nav id="nav"></nav>
+  <main id="view" tabindex="-1"></main>
+</div>
+
+<div id="overlayRoot"></div>
+<div id="toastRoot" aria-live="polite"></div>
+
+<script src="js/i18n.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/db.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/know.js"></script>
+<script src="js/rates.js"></script>
+<script src="js/connectors.js"></script>
+<script src="js/projects.js"></script>
+<script src="js/tpl.js"></script>
+<script src="js/suggest.js"></script>
+<script src="js/explore.js"></script>
+<script src="js/studio.js"></script>
+<script src="js/pdf.js"></script>
+<script src="js/demo.js"></script>
+<script src="js/refs.js"></script>
+<script src="js/map.js"></script>
+<script src="js/clients.js"></script>
+<script src="js/completed.js"></script>
+<script src="js/learning.js"></script>
+<script src="js/tasks.js"></script>
+<script src="js/permissions.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/capture.js"></script>
+<script src="js/art.js"></script>
+<script src="js/home.js"></script>
+<script src="js/lock.js"></script>
+<script src="js/native.js"></script>
+<script src="js/biz.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/apps.js"></script>
+<script src="js/board.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
