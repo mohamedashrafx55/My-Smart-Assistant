@@ -123,6 +123,8 @@ MSA.files = {
     const db = await open(); if (db) await tx(db, 'readwrite', st => st.delete(id)); else mem.delete(id);
   },
   async delMany(list){ for (const a of (list || [])) { try { await MSA.files.del(a.id); } catch (e) {} } },
+  async ids(){ const db = await open(); return db ? tx(db, 'readonly', st => st.getAllKeys()) : Array.from(mem.keys()); },
+  async putRec(rec){ const db = await open(); if (db) await tx(db, 'readwrite', st => st.put(rec)); else mem.set(rec.id, rec); },
   async all(){ const db = await open(); return db ? tx(db, 'readonly', st => st.getAll()) : Array.from(mem.values()); },
   async clear(){ const db = await open(); if (db) await tx(db, 'readwrite', st => st.clear()); mem.clear(); urlCache.forEach(u => URL.revokeObjectURL(u)); urlCache.clear(); }
 };

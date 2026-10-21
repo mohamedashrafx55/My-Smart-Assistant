@@ -101,8 +101,10 @@ document.addEventListener('keydown', e => {
 /* =====================================================================
    BACKUP: reminder every N days, silent save on the phone app, one-click save elsewhere
    ===================================================================== */
-const bk = () => { const s = S().settings; if (!s.backup) s.backup = { on: true, days: 7, last: 0, snooze: 0, where: '' }; const b = s.backup; if (!b.last) { b.last = Date.now(); MSA.save(); } b.days = b.days > 0 ? b.days : 7; return b; };
-const LIGHT = { maxFile: 15 * 1048576, maxTotal: 120 * 1048576 };
+const bk = () => { const s = S().settings; if (!s.backup) s.backup = { on: false, days: 7, last: 0, snooze: 0, where: '', manual: 1, maxMB: 100 }; const b = s.backup;
+  if (!b.manual) { b.manual = 1; b.on = false; MSA.save(); }   /* v19: no automatic backups any more — only when the user asks (the reminder is optional and off by default) */
+  if (!(b.maxMB > 0)) b.maxMB = 100; if (!b.last) { b.last = Date.now(); MSA.save(); } b.days = b.days > 0 ? b.days : 7; return b; };
+const light = () => { const mb = bk().maxMB; return { maxFile: mb * 1048576, maxTotal: Math.max(300, mb * 2) * 1048576 }; };
 const bkName = () => 'my-smart-assistant-backup-' + today() + '.json';
 plus.backupInfo = () => { const b = bk(); return { last: b.last, days: b.days, due: b.on && Date.now() - b.last >= b.days * DAY }; };
 async function pruneNative(FS){
@@ -114,7 +116,7 @@ async function pruneNative(FS){
 }
 /* returns where the backup went, or '' when the user cancelled */
 async function writeBackup(){
-  const json = await MSA.exportAll(LIGHT), name = bkName();
+  const json = await MSA.exportAll(light()), name = bkName();
   const FS = MSA.native && MSA.native('Filesystem'), SH = MSA.native && MSA.native('Share');
   if (FS) {
     try { await FS.writeFile({ path: 'MySmartAssistant/' + name, data: json, directory: 'DOCUMENTS', encoding: 'utf8', recursive: true }); pruneNative(FS); return T('مجلد المستندات / MySmartAssistant', 'Documents / MySmartAssistant'); } catch (e) {}
@@ -145,15 +147,6 @@ async function backupTick(){
   const b = bk(); if (!b.on || document.getElementById('lock')) return;
   if (Date.now() - b.last < b.days * DAY) { hideBanner(); return; }
   if (b.snooze && Date.now() < b.snooze) return;
-  const FS = MSA.native && MSA.native('Filesystem');
-  if (FS && !plus._autoTried) {
-    plus._autoTried = true;
-    try {
-      await FS.writeFile({ path: 'MySmartAssistant/' + bkName(), data: await MSA.exportAll(LIGHT), directory: 'DOCUMENTS', encoding: 'utf8', recursive: true });
-      pruneNative(FS); b.last = Date.now(); b.snooze = 0; b.where = T('مجلد المستندات / MySmartAssistant', 'Documents / MySmartAssistant'); MSA.save();
-      MSA.toast(T('تم حفظ النسخة الاحتياطية تلقائيًا — ' + b.where, 'Backup saved automatically — ' + b.where), 'ok', 5000); return;
-    } catch (e) { console.warn('auto backup', e); }
-  }
   showBanner();
 }
 plus.backupTick = backupTick;
@@ -165,14 +158,14 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) setT
 
 /* ---------- settings section ---------- */
 MSA.plusHTML = function(){
-  const s = S().settings, b = bk(), nat = !!(MSA.native && MSA.native('Filesystem'));
+  const s = S().settings, b = bk();
   const last = b.last ? MSA.fmtDate(b.last, true) : '—';
   return '<div class="sec" id="plusSec"><h4>' + I('bell', 'sm') + esc(T('تذكير النسخ ومتابعة العملاء', 'Auto backup & client follow-ups')) + '</h4>' +
-    '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="bkOn" ' + (b.on ? 'checked' : '') + '><span>' + esc(T('تذكير بنسخة احتياطية دورية', 'Periodic backup reminder')) + '</span></label>' +
+    '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="bkOn" ' + (b.on ? 'checked' : '') + '><span>' + esc(T('ذكّرني بنسخة احتياطية (أنت اللي توافق — مفيش حفظ تلقائي)', 'Remind me to back up (I always confirm — nothing is saved on its own)')) + '</span></label>' +
     '<div class="row" style="margin-bottom:8px"><label class="f" style="margin:0">' + esc(T('كل', 'Every')) + '</label><select id="bkDays" style="width:auto">' + [[1, T('يوم', 'day')], [3, T('3 أيام', '3 days')], [7, T('أسبوع', 'week')], [14, T('أسبوعين', '2 weeks')], [30, T('شهر', 'month')]].map(x => '<option value="' + x[0] + '"' + (b.days === x[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</select><button class="btn sm primary" id="bkNow">' + I('download', 'sm') + esc(T('احفظ نسخة الآن', 'Back up now')) + '</button></div>' +
     '<div class="hint">' + esc(T('آخر نسخة: ', 'Last backup: ')) + '<b>' + esc(last) + '</b>' + (b.where ? ' · ' + esc(b.where) : '') + '</div>' +
-    '<div class="hint" style="margin-top:4px">' + esc(nat ? T('على تطبيق الموبايل تُحفظ النسخة تلقائيًا في «المستندات/MySmartAssistant» عند حلول الموعد (آخر 4 نسخ).', 'In the phone app the copy is saved automatically to Documents/MySmartAssistant when due (last 4 kept).') : T('المتصفح لا يسمح بالحفظ الصامت، فيظهر تنبيه بزر واحد «احفظ الآن» عند حلول الموعد. تطبيق الأندرويد يحفظ تلقائيًا.', 'Browsers cannot save silently, so a one-click “Save now” reminder appears when due. The Android app saves automatically.')) + '</div>' +
-    '<div class="hint" style="margin-top:4px">' + esc(T('النسخة الدورية تشمل كل بياناتك والملفات حتى 15 م.ب للملف الواحد. الفيديوهات الكبيرة لا تدخل فيها — لنسخة كاملة استخدم «تصدير نسخة احتياطية» من قسم البيانات.', 'The periodic copy includes all your data and files up to 15 MB each. Large videos are left out — for a complete copy use “Export backup” in the Data section.')) + '</div>' +
+    '<div class="row" style="margin-top:10px"><label class="f" style="margin:0">' + esc(T('أقصى حجم للملف الواحد في النسخة', 'Max size per file in the backup')) + '</label><select id="bkMax" style="width:auto">' + [15, 50, 100, 200, 400].map(x => '<option value="' + x + '"' + (b.maxMB === x ? ' selected' : '') + '>' + x + ' ' + esc(T('م.ب', 'MB')) + '</option>').join('') + '</select></div>' +
+    '<div class="hint" style="margin-top:4px">' + esc(T('النسخة لا تُحفظ إلا عندما تضغط «احفظ نسخة الآن». الملفات الأكبر من الحد المختار تُترك خارج النسخة وتظهر لك رسالة بعددها. كل ما كبر الحد زادت الذاكرة المطلوبة، فلو الجهاز بطيء أو الموبايل ضعيف اختر حدًا أقل.', 'A copy is only saved when you press “Back up now”. Files larger than the chosen limit are left out and you are told how many. A higher limit needs more memory, so pick a lower one on slow devices or weak phones.')) + '</div>' +
     '<hr class="sep" style="margin:16px 0">' +
     '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="fuOn" ' + (s.followOn !== false ? 'checked' : '') + '><span>' + esc(T('مهمة متابعة تلقائية للعملاء', 'Automatic client follow-up tasks')) + '</span></label>' +
     '<div class="row"><label class="f" style="margin:0">' + esc(T('بعد', 'After')) + '</label><input type="number" id="fuDays" min="1" max="365" value="' + plus.followDays() + '" style="width:90px"><span class="hint">' + esc(T('يومًا من «آخر تواصل» في شيت العملاء', 'days from “Last contact” in the clients sheet')) + '</span></div></div>';
@@ -182,6 +175,7 @@ MSA.wirePlus = function(root, redraw){
   $('#bkOn', root).onchange = e => { b.on = e.target.checked; MSA.save(); if (!b.on) hideBanner(); };
   $('#bkDays', root).onchange = e => { b.days = parseInt(e.target.value, 10) || 7; MSA.save(); };
   $('#bkNow', root).onclick = () => plus.backupNow();
+  $('#bkMax', root).onchange = e => { b.maxMB = parseInt(e.target.value, 10) || 100; MSA.save(); };
   $('#fuOn', root).onchange = e => { s.followOn = e.target.checked; MSA.save(); };
   $('#fuDays', root).onchange = e => { const v = Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 14)); s.followDays = v; e.target.value = v; MSA.save(); plus.checkFollow && plus.checkFollow(); };
 };
