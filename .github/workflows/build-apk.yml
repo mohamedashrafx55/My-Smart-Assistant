@@ -1,0 +1,87 @@
+name: Build Android APK
+
+# يشتغل يدويًا فقط: Actions > Build Android APK > Run workflow
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Prepare web files
+        run: |
+          mkdir -p build/www
+          rsync -a --exclude='.git' --exclude='.github' --exclude='build' --exclude='*.md' --exclude='*.zip' ./ build/www/
+          test -f build/www/index.html
+
+      - name: Create Capacitor project
+        working-directory: build
+        run: |
+          cat > capacitor.config.json <<'JSON'
+          {"appId":"com.mysmartassistant.app","appName":"My Smart Assistant","webDir":"www","server":{"androidScheme":"https"}}
+          JSON
+          npm init -y
+          npm install --no-audit --no-fund --legacy-peer-deps @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/app@6 @capacitor/browser@6 @capacitor/filesystem@6 @capacitor/share@6 @capacitor/local-notifications@6
+          npm install --no-audit --no-fund --legacy-peer-deps @aparajita/capacitor-biometric-auth@8 || echo "biometric plugin skipped"
+          npx cap add android
+
+      - name: Permissions, version, app icon
+        working-directory: build
+        run: |
+          python3 - <<'PY'
+          import re
+          p='android/app/src/main/AndroidManifest.xml'
+          s=open(p,encoding='utf-8').read()
+          add=''
+          for perm in ['POST_NOTIFICATIONS','SCHEDULE_EXACT_ALARM','RECEIVE_BOOT_COMPLETED','USE_BIOMETRIC','VIBRATE']:
+              if 'android.permission.'+perm not in s:
+                  add+='    <uses-permission android:name="android.permission.%s"/>\n'%perm
+          s=s.replace('<application',add+'    <application',1)
+          open(p,'w',encoding='utf-8').write(s)
+          g='android/app/build.gradle'
+          t=open(g,encoding='utf-8').read()
+          import os
+          t=re.sub(r'versionCode\s+\d+','versionCode '+os.environ.get('RUN','1'),t,1)
+          open(g,'w',encoding='utf-8').write(t)
+          PY
+          mkdir -p assets
+          convert www/icons/icon-512.png -resize 1024x1024 assets/icon-only.png || true
+          cp assets/icon-only.png assets/icon-foreground.png || true
+          convert -size 1024x1024 xc:'#0f0f10' assets/icon-background.png || true
+          npm install --no-audit --no-fund --legacy-peer-deps @capacitor/assets || true
+          npx capacitor-assets generate --android || echo "icon generation skipped - default icon will be used"
+        env:
+          RUN: ${{ github.run_number }}
+
+      - name: Fixed signing key (so updates install over the old app)
+        run: |
+          mkdir -p ~/.android
+          echo "$B64" | base64 -d > ~/.android/debug.keystore
+        env:
+          B64: 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
+
+      - name: Build APK
+        working-directory: build
+        run: |
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: My-Smart-Assistant-apk
+          path: build/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
