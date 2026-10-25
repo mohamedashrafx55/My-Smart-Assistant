@@ -65,7 +65,7 @@ function tickClock(){
 /* ---------- first-run content: the Finjan campaign plan ---------- */
 function seed(){
   const s = S(); if (s.seeded) return; s.seeded = true; MSA.save();
-  if (MSA.demo) MSA.demo.load().then(() => { MSA.updateCounts && MSA.updateCounts(); if (MSA.view) MSA.rerender(); }).catch(e => console.warn('demo', e));
+  /* new installs start empty (no sample project); the demo can still be added from Settings → Data */
 }
 
 /* ---------- splash ---------- */

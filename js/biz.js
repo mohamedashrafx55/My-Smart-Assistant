@@ -107,6 +107,7 @@ plus.openProject = function(p, tab){
   if (p.status === 'done') { ui.doneOpen = p.id; MSA.save(); MSA.go('done'); }
   else { ui.project = p.id; ui.ptab = tab || 'plan'; MSA.save(); P.mapReset && P.mapReset(); MSA.go('active'); }
 };
+plus.topDue = n => moneyRows().filter(r => r.rem > 0.005).sort((a, b) => (isLate(b.p) - isLate(a.p)) || egp(b.rem, b.cur) - egp(a.rem, a.cur)).slice(0, n || 3).map(r => ({ id: r.p.id, name: r.p.name, client: (MSA.clients && MSA.clients.of(r.p)) || '', rem: r.rem, cur: r.cur, late: isLate(r.p) }));
 plus.outstanding = () => { const open = moneyRows().filter(r => r.rem > 0.005); return { n: open.length, egp: open.reduce((a, r) => a + egp(r.rem, r.cur), 0), late: open.filter(r => isLate(r.p)).length }; };
 
 /* =====================================================================

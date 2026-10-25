@@ -74,19 +74,25 @@ function renderSettings(host){
         '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="sIntro" ' + (st.intro !== false ? 'checked' : '') + '><span>' + U.esc(t('introAnim')) + '</span></label>' +
         ('Notification' in window ? '<button class="btn sm" id="sNotif">' + I('bell', 'sm') + U.esc(t(Notification.permission === 'granted' ? 'notifOn' : 'enableNotif')) + '</button>' : '') + '</div>' +
       (MSA.ratesHTML ? MSA.ratesHTML() : '') +
+      (MSA.dailyHTML ? MSA.dailyHTML() : '') +
+      (MSA.alarmsHTML ? MSA.alarmsHTML() : '') +
+      (MSA.proHTML ? MSA.proHTML() : '') +
       (MSA.syncHTML ? MSA.syncHTML() : '') +
       (MSA.plusHTML ? MSA.plusHTML() : '') +
       MSA.connHTML() +
       MSA.lockHTML() +
       MSA.permsHTML() +
       '<div class="sec"><h4>' + I('shield', 'sm') + U.esc(t('s.data')) + '</h4><div class="hint" style="margin-bottom:10px">' + U.esc(t('dataHint')) + ' <span id="usage"></span></div>' +
-        '<div class="row"><button class="btn sm" id="sExport">' + I('download', 'sm') + U.esc(t('exportBackup')) + '</button><button class="btn sm" id="sImport">' + I('upload', 'sm') + U.esc(t('importBackup')) + '</button><button class="btn sm" id="sDemo">' + I('sparkles', 'sm') + U.esc(MSA.T('إضافة المشروع التجريبي', 'Add the demo project')) + '</button><button class="btn sm danger" id="sReset">' + I('trash', 'sm') + U.esc(t('resetAll')) + '</button></div></div>' +
+        '<div class="row"><button class="btn sm" id="sExport">' + I('download', 'sm') + U.esc(t('exportBackup')) + '</button><button class="btn sm" id="sImport">' + I('upload', 'sm') + U.esc(t('importBackup')) + '</button><button class="btn sm" id="sDemo">' + I('sparkles', 'sm') + U.esc(MSA.T('إضافة المشروع التجريبي', 'Add the demo project')) + '</button><button class="btn sm danger" id="sWipe">' + I('trash', 'sm') + U.esc(MSA.T('مسح المشاريع والمهام والملاحظات', 'Clear projects, tasks & notes')) + '</button><button class="btn sm danger" id="sReset">' + I('trash', 'sm') + U.esc(t('resetAll')) + '</button></div></div>' +
       '<div class="hint" style="text-align:center;padding:6px 0 18px">My Smart Assistant · v1.0</div>';
     wire();
     MSA.wireLock(m.el, draw);
     MSA.wireConn(m.el, draw);
     if (MSA.wireRates) MSA.wireRates(m.el, draw);
+    if (MSA.wireDaily) MSA.wireDaily(m.el);
     if (MSA.wireSync) MSA.wireSync(m.el, draw);
+    if (MSA.wirePro) MSA.wirePro(m.el);
+    if (MSA.wireAlarms) MSA.wireAlarms(m.el);
     if (MSA.wirePlus) MSA.wirePlus(m.el, draw);
     MSA.wirePerms(m.el);
     usage();
@@ -129,6 +135,7 @@ function renderSettings(host){
       try { await MSA.importAll(await f.text()); location.reload(); } catch (e) { MSA.toast(t('importFail'), 'err'); }
     };
     $('#sDemo', el).onclick = async () => { const b = $('#sDemo', el); b.disabled = true; MSA.toast(MSA.T('جاري تجهيز المشروع التجريبي…', 'Preparing the demo project…')); try { await MSA.demo.load(); MSA.toast(MSA.T('تمت الإضافة في «قيد التنفيذ»', 'Added to “In progress”'), 'ok'); MSA.updateCounts && MSA.updateCounts(); } catch (e) { MSA.toast(MSA.T('تعذّر الإنشاء', 'Failed'), 'err'); } b.disabled = false; };
+    $('#sWipe', el).onclick = async () => { if (await MSA.clean.run()) draw(); };
     $('#sReset', el).onclick = async () => {
       if (!await MSA.confirm(t('resetQ'), { danger: true, okLabel: t('resetAll') })) return;
       if (!await MSA.confirm(t('resetQ2'), { danger: true, okLabel: t('resetAll') })) return;

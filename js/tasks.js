@@ -273,6 +273,7 @@ function checkReminders(first){
 MSA.startReminders = function(){ setTimeout(() => checkReminders(true), 1500); setInterval(() => checkReminders(false), 15000); };
 MSA.taskStats = () => ({ open: T().filter(x => x.type === 'task' && !isDone(x)).length, notes: T().filter(x => x.type === 'note').length });
 
+MSA.tasksApi = { setDone, blank, refresh, toInput };
 MSA.views.tasks = { render };
 })();
 

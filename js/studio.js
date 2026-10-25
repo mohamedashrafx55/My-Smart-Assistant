@@ -325,6 +325,7 @@ function tDelivery(p, box){
    LEARNING TABS
    ===================================================================== */
 const LTABS = [['videos', 'play', 'الفيديوهات', 'Videos'], ['refs', 'image', 'المراجع', 'References'], ['trends', 'sparkles', 'الترندات', 'Trends'], ['plan', 'check-c', 'خطة التعلم', 'Learning plan']];
+MSA.studio.LTABS = LTABS;
 MSA.studio.learnTabBar = cur => '<div class="tabs-scroll stab">' + LTABS.map(x => '<button class="ttab ' + (x[0] === cur ? 'on' : '') + '" data-lt="' + x[0] + '">' + I(x[1], 'sm') + esc(T(x[2], x[3])) + '</button>').join('') + '</div>';
 MSA.studio.renderLearn = function(tab, box){ ({ refs: b => MSA.refsView(b), trends: lTrends, plan: lPlan })[tab](box); };
 const rootEl = box => box;
