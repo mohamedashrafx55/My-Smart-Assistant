@@ -1,0 +1,135 @@
+name: Build Windows EXE
+
+# يشتغل يدويًا فقط: Actions > Build Windows EXE > Run workflow
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Prepare web files
+        run: |
+          mkdir -p build/www
+          tar --exclude=./.git --exclude=./.github --exclude=./build --exclude='*.md' --exclude='*.zip' -cf - . | (cd build/www && tar -xf -)
+          test -f build/www/index.html
+
+      - name: Create desktop app files
+        working-directory: build
+        run: |
+          cat > package.json <<'JSON'
+          {
+            "name": "my-smart-assistant",
+            "version": "1.0.0",
+            "description": "My Smart Assistant",
+            "author": "Mohamed Ashraf",
+            "main": "main.js",
+            "build": {
+              "appId": "com.mysmartassistant.app",
+              "productName": "My Smart Assistant",
+              "directories": { "output": "dist" },
+              "files": ["main.js", "www/**/*"],
+              "win": { "target": "nsis", "icon": "www/icons/icon-512.png" },
+              "nsis": {
+                "oneClick": false,
+                "allowToChangeInstallationDirectory": true,
+                "perMachine": false,
+                "createDesktopShortcut": true,
+                "createStartMenuShortcut": true,
+                "shortcutName": "My Smart Assistant"
+              },
+              "artifactName": "My-Smart-Assistant-Setup.${ext}"
+            }
+          }
+          JSON
+          cat > main.js <<'JS'
+          const { app, BrowserWindow, Tray, Menu, shell, nativeImage } = require('electron');
+          const path = require('path');
+          const fs = require('fs');
+
+          if (!app.requestSingleInstanceLock()) { app.quit(); }
+          app.setAppUserModelId('com.mysmartassistant.app');
+
+          let win = null, tray = null, quitting = false;
+          const startHidden = process.argv.includes('--hidden');
+
+          function showWindow() {
+            if (!win) { createWindow(); return; }
+            if (win.isMinimized()) win.restore();
+            win.show();
+            win.focus();
+          }
+
+          function createWindow() {
+            win = new BrowserWindow({
+              width: 1280, height: 820, minWidth: 360, minHeight: 500,
+              show: !startHidden,
+              autoHideMenuBar: true,
+              backgroundColor: '#0f0f10',
+              icon: path.join(__dirname, 'www/icons/icon-512.png'),
+              webPreferences: { backgroundThrottling: false, contextIsolation: true, nodeIntegration: false, spellcheck: false }
+            });
+            win.setMenuBarVisibility(false);
+            win.loadFile(path.join(__dirname, 'www/index.html'));
+            win.webContents.setWindowOpenHandler(({ url }) => {
+              if (/^(https?|mailto|tel):/i.test(url)) shell.openExternal(url);
+              return { action: 'deny' };
+            });
+            win.webContents.on('will-navigate', (e, url) => {
+              if (!url.startsWith('file:')) { e.preventDefault(); if (/^https?:/i.test(url)) shell.openExternal(url); }
+            });
+            win.on('close', (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });
+          }
+
+          app.on('second-instance', showWindow);
+          app.on('before-quit', () => { quitting = true; });
+          app.on('window-all-closed', () => {});
+
+          app.whenReady().then(() => {
+            Menu.setApplicationMenu(null);
+            createWindow();
+
+            const flag = path.join(app.getPath('userData'), 'init.flag');
+            if (!fs.existsSync(flag)) {
+              app.setLoginItemSettings({ openAtLogin: true, args: ['--hidden'] });
+              try { fs.writeFileSync(flag, '1'); } catch (e) {}
+            }
+
+            const icon = nativeImage.createFromPath(path.join(__dirname, 'www/icons/icon-192.png')).resize({ width: 16, height: 16 });
+            tray = new Tray(icon);
+            tray.setToolTip('My Smart Assistant');
+            const buildMenu = () => Menu.buildFromTemplate([
+              { label: 'فتح / Open', click: showWindow },
+              { label: 'تشغيل مع الويندوز / Start with Windows', type: 'checkbox', checked: app.getLoginItemSettings().openAtLogin,
+                click: (item) => { app.setLoginItemSettings({ openAtLogin: item.checked, args: ['--hidden'] }); } },
+              { type: 'separator' },
+              { label: 'خروج / Quit', click: () => { quitting = true; app.quit(); } }
+            ]);
+            tray.setContextMenu(buildMenu());
+            tray.on('click', showWindow);
+            tray.on('right-click', () => tray.setContextMenu(buildMenu()));
+          });
+          JS
+          node --check main.js
+
+      - name: Build installer
+        working-directory: build
+        run: |
+          npm install --no-audit --no-fund --save-dev electron@33 electron-builder@25
+          npx electron-builder --win nsis --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: My-Smart-Assistant-windows
+          path: build/dist/My-Smart-Assistant-Setup.exe
+          if-no-files-found: error
