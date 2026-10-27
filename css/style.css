@@ -542,7 +542,7 @@ svg.xs{width:11px;height:11px}
 .ht-title{font-size:clamp(15px,2vw,22px);font-weight:700;line-height:1.25}
 .ht-sub{font-size:clamp(11.5px,1.2vw,13.5px);color:var(--muted);line-height:1.4}
 .ht-count{position:absolute;top:clamp(10px,1.6vw,18px);inset-inline-end:clamp(10px,1.6vw,18px);font-size:12px;font-weight:700;padding:3px 11px;border-radius:99px;background:color-mix(in srgb,var(--c) 22%,var(--panel));border:1px solid color-mix(in srgb,var(--c) 45%,transparent);color:var(--text)}
-@media (max-width:560px){.home-grid{min-height:0;grid-auto-rows:minmax(190px,1fr)}.ht-sub{display:none}.hometile{border-radius:22px}.ht-art{height:72%}}
+@media (max-width:560px){.home-grid{min-height:410px;grid-template-rows:repeat(2,minmax(195px,1fr))}.htab{padding:11px 8px;font-size:13.5px}.ht-sub{display:none}.hometile{border-radius:22px}.ht-art{height:72%}}
 @media (prefers-reduced-motion:reduce){.hometile{animation:none}}
 
 /* ===== Connectors + Suggestions + Identity ===== */
@@ -1004,7 +1004,15 @@ html.bd-open body{overflow:hidden}
 #syncSec input{width:100%}
 
 /* ---------- weekly to-do + payments on the home screen ---------- */
-.home-row{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(240px,1fr);gap:14px;margin-top:14px;align-items:start}
+.home-panel{margin-top:12px;display:grid;gap:10px;min-width:0}
+.home-tabs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.htab{display:flex;align-items:center;justify-content:center;gap:8px;min-width:0;padding:12px 14px;border-radius:16px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:14.5px;font-weight:700;cursor:pointer;transition:border-color .2s,background .2s}
+.htab:hover{border-color:var(--accent)}
+.htab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.htab-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.htab-n{font-size:12px;font-weight:700;padding:1px 9px;border-radius:99px;background:color-mix(in srgb,var(--accent) 22%,var(--panel2));color:var(--text);white-space:nowrap}
+.htab.on .htab-n{background:rgba(255,255,255,.25);color:#fff}
+.home-panel .wk,.home-panel .wk-pay{min-width:0;max-width:100%}
 .wk,.wk-pay{padding:16px}
 .wk-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .wk-ttl{display:flex;align-items:center;gap:8px}.wk-ttl h3,.wk-phead h3{margin:0;font-size:16px}
@@ -1041,7 +1049,6 @@ html.bd-open body{overflow:hidden}
 .wk-pok{display:flex;align-items:center;gap:8px;color:var(--muted);padding:14px 0}
 .wk-big{font-size:18px;font-weight:700;margin-bottom:10px}
 .wk-modal{max-height:70vh;overflow:auto}
-@media(max-width:900px){.home-row{grid-template-columns:1fr}}
 @media(max-width:520px){.wk,.wk-pay{padding:12px}.wk-d{padding:6px 0}.wk-dn{font-size:15px}.wk-add #wkTm{width:92px}}
 
 /* pro tools */
@@ -1052,3 +1059,4 @@ html.bd-open body{overflow:hidden}
 .pro-assets{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
 .pro-asset{padding:12px;display:flex;flex-direction:column;gap:4px}
 .pro-sw{height:44px;border-radius:8px;margin-bottom:6px;border:1px solid rgba(128,128,128,.3)}
+

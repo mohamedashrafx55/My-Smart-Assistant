@@ -56,12 +56,30 @@ jobs:
           t=re.sub(r'versionCode\s+\d+','versionCode '+os.environ.get('RUN','1'),t,1)
           open(g,'w',encoding='utf-8').write(t)
           PY
-          mkdir -p assets
-          convert www/icons/icon-512.png -resize 1024x1024 assets/icon-only.png || true
-          cp assets/icon-only.png assets/icon-foreground.png || true
-          convert -size 1024x1024 xc:'#0f0f10' assets/icon-background.png || true
-          npm install --no-audit --no-fund --legacy-peer-deps @capacitor/assets || true
-          npx capacitor-assets generate --android || echo "icon generation skipped - default icon will be used"
+          python3 -c "import PIL" 2>/dev/null || pip install --break-system-packages pillow || pip install pillow
+          python3 - <<'PY'
+          from PIL import Image, ImageDraw
+          import os
+          res = 'android/app/src/main/res'
+          src = '../.github/android-icons'
+          fg = Image.open(src + '/icon-foreground.png').convert('RGBA')
+          full = Image.open(src + '/icon-only.png').convert('RGBA')
+          dens = {'mdpi': (48, 108), 'hdpi': (72, 162), 'xhdpi': (96, 216), 'xxhdpi': (144, 324), 'xxxhdpi': (192, 432)}
+          for d, (legacy, adaptive) in dens.items():
+              p = '%s/mipmap-%s' % (res, d)
+              os.makedirs(p, exist_ok=True)
+              fg.resize((adaptive, adaptive), Image.LANCZOS).save(p + '/ic_launcher_foreground.png')
+              sq = full.resize((legacy, legacy), Image.LANCZOS)
+              m = Image.new('L', (legacy, legacy), 0)
+              ImageDraw.Draw(m).rounded_rectangle((0, 0, legacy - 1, legacy - 1), radius=int(legacy * 0.22), fill=255)
+              a = Image.new('RGBA', (legacy, legacy), (0, 0, 0, 0)); a.paste(sq, (0, 0), m); a.save(p + '/ic_launcher.png')
+              m2 = Image.new('L', (legacy, legacy), 0)
+              ImageDraw.Draw(m2).ellipse((0, 0, legacy - 1, legacy - 1), fill=255)
+              b = Image.new('RGBA', (legacy, legacy), (0, 0, 0, 0)); b.paste(sq, (0, 0), m2); b.save(p + '/ic_launcher_round.png')
+          os.makedirs(res + '/values', exist_ok=True)
+          open(res + '/values/ic_launcher_background.xml', 'w').write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#222222</color>\n</resources>\n')
+          print('icons written')
+          PY
         env:
           RUN: ${{ github.run_number }}
 

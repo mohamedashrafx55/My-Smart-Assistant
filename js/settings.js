@@ -73,7 +73,6 @@ function renderSettings(host){
         '<div class="field"><label class="f">' + U.esc(t('accent')) + '</label><div class="swatches" id="sAcc">' + ACCENTS.map(c => '<button class="sw ' + (st.accent === c ? 'on' : '') + '" data-c="' + c + '" style="background:' + c + '" aria-label="' + c + '"></button>').join('') + '<label class="sw" style="display:grid;place-items:center;background:var(--panel2);cursor:pointer;position:relative">' + I('palette', 'sm') + '<input type="color" id="accCustom" value="' + st.accent + '" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer"></label></div></div>' +
         '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="sIntro" ' + (st.intro !== false ? 'checked' : '') + '><span>' + U.esc(t('introAnim')) + '</span></label>' +
         ('Notification' in window ? '<button class="btn sm" id="sNotif">' + I('bell', 'sm') + U.esc(t(Notification.permission === 'granted' ? 'notifOn' : 'enableNotif')) + '</button>' : '') + '</div>' +
-      (MSA.ratesHTML ? MSA.ratesHTML() : '') +
       (MSA.dailyHTML ? MSA.dailyHTML() : '') +
       (MSA.alarmsHTML ? MSA.alarmsHTML() : '') +
       (MSA.proHTML ? MSA.proHTML() : '') +
@@ -88,7 +87,6 @@ function renderSettings(host){
     wire();
     MSA.wireLock(m.el, draw);
     MSA.wireConn(m.el, draw);
-    if (MSA.wireRates) MSA.wireRates(m.el, draw);
     if (MSA.wireDaily) MSA.wireDaily(m.el);
     if (MSA.wireSync) MSA.wireSync(m.el, draw);
     if (MSA.wirePro) MSA.wirePro(m.el);

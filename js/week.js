@@ -92,7 +92,7 @@ function widgetHTML(){
     '<div class="wk-list">' + body + '</div>' +
     '<div class="wk-foot"><button class="btn sm ghost" data-wk="clear">' + I('trash', 'sm') + esc(T('مسح المكتملة', 'Clear completed')) + '</button><button class="btn sm ghost" data-wk="all">' + esc(T('كل المهام والملاحظات', 'All tasks & notes')) + I('chev-l', 'sm flip') + '</button></div>';
 }
-function redraw(){ if (!wEl || !document.body.contains(wEl)) return; const f = document.activeElement, keep = f && f.id === 'wkIn' ? f.value : null, tm = $('#wkTm', wEl) ? $('#wkTm', wEl).value : ''; wEl.innerHTML = widgetHTML(); const i = $('#wkIn', wEl); if (keep !== null) { i.value = keep; i.focus(); } if (tm && $('#wkTm', wEl)) $('#wkTm', wEl).value = tm; }
+function redraw(){ if (!wEl || !document.body.contains(wEl)) return; const f = document.activeElement, keep = f && f.id === 'wkIn' ? f.value : null, tm = $('#wkTm', wEl) ? $('#wkTm', wEl).value : ''; wEl.innerHTML = widgetHTML(); const i = $('#wkIn', wEl); if (keep !== null) { i.value = keep; i.focus(); } if (tm && $('#wkTm', wEl)) $('#wkTm', wEl).value = tm; tabsUpdate(); }
 const byId = id => S().tasks.find(x => x.id === id);
 
 function addTask(title, k, time){
@@ -163,6 +163,20 @@ function payHTML(){
     '<button class="btn sm" data-pay="open">' + esc(T('فتح المدفوعات', 'Open payments')) + I('chev-l', 'sm flip') + '</button>';
 }
 
+/* ---------- home tabs: Tasks | Payments ---------- */
+const homeTab = () => { const t = S().ui.hometab; return t === 'tasks' || t === 'pay' ? t : ''; };
+function tabsInner(){
+  const sm = summary(), o = plus.outstanding ? plus.outstanding() : { n: 0, egp: 0 }, cur = homeTab();
+  return '<button class="htab' + (cur === 'tasks' ? ' on' : '') + '" data-ht="tasks" aria-pressed="' + (cur === 'tasks') + '">' + I('checks', 'sm') + '<span class="htab-t">' + esc(T('جدول المهام', 'Weekly tasks')) + '</span>' + (sm.n ? '<span class="htab-n">' + sm.n + '</span>' : '') + '</button>' +
+    '<button class="htab' + (cur === 'pay' ? ' on' : '') + '" data-ht="pay" aria-pressed="' + (cur === 'pay') + '">' + I('check-c', 'sm') + '<span class="htab-t">' + esc(T('المدفوعات', 'Payments')) + '</span>' + (o.n ? '<span class="htab-n" dir="ltr">' + plus.fmt0(o.egp) + '</span>' : '') + '</button>';
+}
+function tabsUpdate(){ const t = document.getElementById('wkTabs'); if (t) t.innerHTML = tabsInner(); }
+function applyTab(){
+  const cur = homeTab(), b = document.getElementById('wkBoard'), p = document.getElementById('wkPay');
+  if (b) b.hidden = cur !== 'tasks'; if (p) p.hidden = cur !== 'pay';
+  tabsUpdate(); if (cur === 'tasks') redraw();
+}
+
 /* ---------- mount on the home screen ---------- */
 const hv = MSA.views.home;
 if (hv) {
@@ -171,11 +185,13 @@ if (hv) {
     hr.apply(this, arguments);
     const strip = $('.home-strip', host), head = $('.home-head', host); if (!(strip || head)) return;
     const mny = strip && $('.hs-money', strip); if (mny) mny.remove();   /* the payments card below replaces the small chip */
-    const row = document.createElement('div'); row.className = 'home-row';
-    row.innerHTML = '<section class="wk card" id="wkBoard"></section><aside class="wk-pay card" id="wkPay"></aside>';
+    const row = document.createElement('div'); row.className = 'home-panel';
+    row.innerHTML = '<div class="home-tabs" id="wkTabs"></div><section class="wk card" id="wkBoard" hidden></section><aside class="wk-pay card" id="wkPay" hidden></aside>';
     (strip || head).after(row);
     wEl = $('#wkBoard', row); wEl.innerHTML = widgetHTML(); wire(wEl);
     const pay = $('#wkPay', row); pay.innerHTML = payHTML();
+    const tabs = $('#wkTabs', row); tabs.onclick = e => { const b = e.target.closest('[data-ht]'); if (!b) return; const u = S().ui; u.hometab = u.hometab === b.dataset.ht ? '' : b.dataset.ht; MSA.save(); applyTab(); };
+    applyTab();
     pay.onclick = e => { const p = e.target.closest('[data-pid]'); if (p) { const pr = S().projects.find(x => x.id === p.dataset.pid); if (pr && plus.openProject) plus.openProject(pr, 'time'); else MSA.go('money'); } else if (e.target.closest('[data-pay]')) MSA.go('money'); };
   };
 }
@@ -208,7 +224,7 @@ function openToday(){
     else if (a === 'edit' && x) { m.close(); MSA.openTaskEditor(x); }
     else if (a === 'more') { e.stopPropagation(); }
     else if (a === 'tomorrow') { overdue().forEach(y => setDay(y, todayKey())); persist(); m.close(); openToday(); MSA.view === 'home' && MSA.rerender(true); }
-    else if (a === 'board') { m.close(); selKey = todayKey(); weekStart = startOfWeek(new Date()); MSA.go('home'); setTimeout(() => { const w = document.getElementById('wkBoard'); w && w.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120); }
+    else if (a === 'board') { m.close(); S().ui.hometab = 'tasks'; selKey = todayKey(); weekStart = startOfWeek(new Date()); MSA.go('home'); setTimeout(() => { const w = document.getElementById('wkBoard'); w && w.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120); }
   };
   $$('[data-wk=more]', m.el).forEach(n => n.remove());
   $$('.wk-t', m.el).forEach(n => n.removeAttribute('draggable'));

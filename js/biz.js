@@ -90,7 +90,8 @@ function moneyRender(host){
           '<div class="progress" style="margin:8px 0"><i style="width:' + pct + '%"></i></div>' +
           '<div class="row mr-acts">' + (r.rem > 0.005 ? '<button class="btn sm primary" data-ma="pay">' + I('plus', 'sm') + esc(T('دفعة', 'Payment')) + '</button><button class="btn sm" data-ma="remind">' + I('mail', 'sm') + esc(T('رسالة تذكير', 'Send reminder')) + '</button>' : '<button class="btn sm" data-ma="thanks">' + I('mail', 'sm') + esc(T('رسالة تسليم', 'Delivery message')) + '</button>') + '<button class="btn sm" data-ma="open">' + I('external', 'sm') + esc(T('فتح المشروع', 'Open project')) + '</button></div></div>'; }).join('') + '</div>').join('')
       : MSA.empty('check-c', f === 'open' ? T('كل مستحقاتك محصّلة 🎉', 'Everything is collected 🎉') : T('لا يوجد شيء هنا', 'Nothing here'), rows.length ? '' : T('حدد سعرًا لمشروع من تبويب «الوقت والتسعير» وسيظهر هنا.', 'Set a price on a project (Time & pricing tab) and it will show up here.'))) +
-    (unpriced ? '<div class="hint" style="margin-top:14px">' + esc(T(unpriced + ' مشروع قيد التنفيذ بلا سعر محدد (لا يظهر هنا).', unpriced + ' project(s) in progress have no price yet (not listed).')) + '</div>' : '') + '</div>';
+    (unpriced ? '<div class="hint" style="margin-top:14px">' + esc(T(unpriced + ' مشروع قيد التنفيذ بلا سعر محدد (لا يظهر هنا).', unpriced + ' project(s) in progress have no price yet (not listed).')) + '</div>' : '') + (MSA.ratesHTML ? MSA.ratesHTML() : '') + '</div>';
+  if (MSA.wireRates) MSA.wireRates(host, () => MSA.rerender());
   host.onclick = e => {
     const b = e.target.closest('[data-ma]'); if (!b) return; const a = b.dataset.ma;
     if (a === 'f') { ui.moneyF = b.dataset.v; MSA.save(); MSA.rerender(); return; }
