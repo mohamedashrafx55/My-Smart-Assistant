@@ -62,11 +62,12 @@ function stepHTML(s, depth){
       '<input type="checkbox" class="cb ' + (part ? 'indet' : '') + '" data-act="toggle" ' + (done ? 'checked' : '') + ' aria-label="' + U.esc(t('markDone')) + '">' +
       '<div class="step-title"><span class="ttl">' + U.esc(P.title(s)) + '</span>' + (hint ? '<span class="step-hint">' + U.esc(hint) + '</span>' : '') + '</div>' +
       (MSA.plus && MSA.plus.dueChip ? MSA.plus.dueChip(s) : '') + (done ? '<span class="done-mark">' + I('check', 'sm') + U.esc(t('done')) + '</span>' : '') +
-      '<div class="add-btns">' + (s.key === 'mood' ? '<button class="btn sm primary" data-act="board" title="' + U.esc(MSA.T('مود بورد (زي PureRef)', 'Moodboard (PureRef-style)')) + '">' + I('layers', 'sm') + U.esc(MSA.T('فتح المود بورد', 'Open moodboard')) + '</button>' : '') + '<button class="icon-btn" data-act="apps" title="' + U.esc(MSA.T('البرامج المستخدمة', 'Programs used')) + '" aria-label="apps">' + I('grid', 'sm') + '</button><button class="btn sm sug-btn" data-act="sug" title="' + U.esc(MSA.T('اقتراحات لهذه الخطوة','Suggestions for this step')) + '">' + I('sparkles', 'sm') + U.esc(MSA.T('الاقتراحات','Suggestions')) + '</button>' + btn('image', 'image') + btn('doc', 'doc') + btn('video', 'video') + btn('audio', 'music') +
+      '<div class="add-btns">' + (s.key === 'mood' ? '<button class="btn sm primary" data-act="board" title="' + U.esc(MSA.T('مود بورد (زي PureRef)', 'Moodboard (PureRef-style)')) + '">' + I('layers', 'sm') + U.esc(MSA.T('فتح المود بورد', 'Open moodboard')) + '</button>' : '') + '<button class="icon-btn" data-act="apps" title="' + U.esc(MSA.T('البرامج المستخدمة', 'Programs used')) + '" aria-label="apps">' + I('grid', 'sm') + '</button><button class="btn sm sug-btn" data-act="sug" title="' + U.esc(MSA.T('اقتراحات لهذه الخطوة','Suggestions for this step')) + '">' + I('sparkles', 'sm') + U.esc(MSA.T('الاقتراحات','Suggestions')) + '</button>' + btn('image', 'image') + btn('doc', 'doc') + btn('video', 'video') + btn('audio', 'music') + (MSA.tips ? MSA.tips.btn(s, current()) : '') +
         '<button class="icon-btn" data-act="note" title="' + U.esc(t('note')) + '" aria-label="' + U.esc(t('note')) + '">' + I('pencil', 'sm') + '</button>' +
         '<button class="icon-btn" data-act="more" aria-label="' + U.esc(t('more')) + '">' + I('more', 'sm') + '</button></div>' +
     '</div>' +
     (s.apps && s.apps.length ? '<div class="step-apps" data-act="apps">' + MSA.apps.chips(s, 26) + '</div>' : '') +
+    (MSA.tips ? MSA.tips.box(s, current()) : '') +
     (s.atts.length ? '<div class="atts">' + s.atts.map(a => MSA.attHTML(a, true)).join('') + '</div>' : '') +
     (noteOpen ? '<div class="note-box"><textarea data-note placeholder="' + U.esc(t('notePh')) + '">' + U.esc(s.note) + '</textarea></div>' : '') +
     (s.children.length ? '<div class="sub">' + s.children.map(c => stepHTML(c, depth + 1)).join('') + '</div>' : '') +
@@ -126,6 +127,8 @@ function bind(host){
     board: el => { const r = stepOf(el); if (r) MSA.board.open(p(), r.step); },
     sug: el => { const r = stepOf(el); if (r && MSA.suggest) MSA.suggest.open(p(), r.step); },
     identity: () => { if (MSA.suggest) MSA.suggest.openIdentity(p()); },
+    tips: el => { const r = stepOf(el); if (!r) return; MSA.tips.toggle(r.step); MSA.rerender(true); },
+    tip: el => { const r = stepOf(el); if (r) MSA.tips.tick(r.step, el.dataset.k, el); },
     note: el => { const r = stepOf(el); if (!r) return; if (openNotes.has(r.step.id) && !r.step.note) openNotes.delete(r.step.id); else openNotes.add(r.step.id); MSA.rerender(); setTimeout(() => { const ta = $('[data-step="' + r.step.id + '"] textarea[data-note]'); ta && ta.focus(); }, 30); },
     more: (el, e) => {
       const r = stepOf(el); if (!r) return; const rc = el.getBoundingClientRect();

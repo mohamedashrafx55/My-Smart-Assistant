@@ -74,6 +74,7 @@ function renderSettings(host){
         '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="sIntro" ' + (st.intro !== false ? 'checked' : '') + '><span>' + U.esc(t('introAnim')) + '</span></label>' +
         ('Notification' in window ? '<button class="btn sm" id="sNotif">' + I('bell', 'sm') + U.esc(t(Notification.permission === 'granted' ? 'notifOn' : 'enableNotif')) + '</button>' : '') + '</div>' +
       (MSA.dailyHTML ? MSA.dailyHTML() : '') +
+      (MSA.soundHTML ? MSA.soundHTML() : '') +
       (MSA.alarmsHTML ? MSA.alarmsHTML() : '') +
       (MSA.proHTML ? MSA.proHTML() : '') +
       (MSA.syncHTML ? MSA.syncHTML() : '') +
@@ -90,6 +91,7 @@ function renderSettings(host){
     if (MSA.wireDaily) MSA.wireDaily(m.el);
     if (MSA.wireSync) MSA.wireSync(m.el, draw);
     if (MSA.wirePro) MSA.wirePro(m.el);
+    if (MSA.wireSound) MSA.wireSound(m.el);
     if (MSA.wireAlarms) MSA.wireAlarms(m.el);
     if (MSA.wirePlus) MSA.wirePlus(m.el, draw);
     MSA.wirePerms(m.el);

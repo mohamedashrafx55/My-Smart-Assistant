@@ -83,6 +83,35 @@ jobs:
         env:
           RUN: ${{ github.run_number }}
 
+      - name: Notification sounds (5 tones into res/raw)
+        working-directory: build
+        run: |
+          python3 - <<'PY'
+          import json, math, struct, wave, os, random
+          spec = json.load(open('../.github/android-sounds.json'))
+          out = 'android/app/src/main/res/raw'; os.makedirs(out, exist_ok=True)
+          SR = 22050
+          def osc(w, ph):
+              x = ph % 1.0
+              if w == 'square': return 1.0 if x < .5 else -1.0
+              if w == 'triangle': return 4 * abs(x - .5) - 1
+              return math.sin(2 * math.pi * x)
+          for sp in spec:
+              total = max(n['t'] + n['d'] for n in sp['n']) + .1
+              buf = [0.0] * int(SR * total)
+              for n in sp['n']:
+                  s0 = int(n['t'] * SR); L = int(n['d'] * SR); ph = 0.0
+                  f1, f2 = n['f'], n.get('f2') or n['f']
+                  for i in range(L):
+                      r = i / L; f = f1 * (f2 / f1) ** r; ph += f / SR
+                      att = min(1.0, i / (SR * .015)); dec = math.exp(-5 * r)
+                      if s0 + i < len(buf): buf[s0 + i] += osc(n['w'], ph) * n['g'] * att * dec
+              m = max(1e-6, max(abs(v) for v in buf)); k = min(1.0, .9 / m)
+              wf = wave.open(out + '/msa_' + sp['id'] + '.wav', 'wb'); wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SR)
+              wf.writeframes(b''.join(struct.pack('<h', int(max(-1, min(1, v * k)) * 32000)) for v in buf)); wf.close()
+          print('sounds written:', os.listdir(out))
+          PY
+
       - name: Fixed signing key (so updates install over the old app)
         run: |
           mkdir -p ~/.android

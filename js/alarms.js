@@ -4,7 +4,10 @@ const MSA = window.MSA, U = MSA.u, I = MSA.icon, $ = MSA.$, esc = U.esc;
 const S = () => MSA.state, T = (a, e) => MSA.T(a, e);
 const LN = () => (MSA.native ? MSA.native('LocalNotifications') : null);
 const isEl = /Electron/i.test(navigator.userAgent);
-const CH = 'msa-alerts';
+const BASE = 'msa-alerts';
+const sndId = () => (MSA.sound ? MSA.sound.current() : 'bell');
+const chId = () => { const s = sndId(); return s === 'off' ? BASE + '-silent' : BASE + '-' + s; };
+const chDef = () => { const s = sndId(), o = { id: chId(), name: T('تنبيهات المساعد', 'Assistant alerts') + (s === 'off' ? '' : ' · ' + s), importance: s === 'off' ? 3 : 4, visibility: 1, vibration: true }; if (s !== 'off') o.sound = 'msa_' + s + '.wav'; else o.sound = ''; return o; };
 const hash = s => { let h = 7; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return (Math.abs(h) % 1800000000) + 1000; };
 const askedKey = 'msa_alarm_asked';
 let busy = false, again = false, lastSig = '', timer = 0;
@@ -45,19 +48,19 @@ async function sync(ask){
   const ln = LN(); if (!ln) return false;
   if (busy) { again = true; return false; } busy = true;
   try {
-    const items = plan(), sig = JSON.stringify(items.map(x => [x.id, x.at, x.title, x.body]));
+    const items = plan(), sig = JSON.stringify(items.map(x => [x.id, x.at, x.title, x.body, chId()]));
     if (!items.length && !lastSig && !ask) { busy = false; return true; }
     if (!await perm(ln, ask || items.length > 0)) return false;
     if (sig === lastSig && !ask) return true;
-    try { await ln.createChannel({ id: CH, name: T('تنبيهات المساعد', 'Assistant alerts'), importance: 4, visibility: 1, vibration: true }); } catch (e) {}
+    try { await ln.createChannel(chDef()); } catch (e) {}
     const pend = await ln.getPending();
     if (pend && pend.notifications && pend.notifications.length) await ln.cancel({ notifications: pend.notifications.map(n => ({ id: n.id })) });
-    if (items.length) await ln.schedule({ notifications: items.map(x => ({ id: x.id, title: x.title, body: x.body, channelId: CH, schedule: { at: new Date(x.at), allowWhileIdle: true }, extra: x.extra })) });
+    if (items.length) await ln.schedule({ notifications: items.map(x => ({ id: x.id, title: x.title, body: x.body, channelId: chId(), schedule: { at: new Date(x.at), allowWhileIdle: true }, extra: x.extra })) });
     lastSig = sig; return true;
   } catch (e) { return false; } finally { busy = false; if (again) { again = false; setTimeout(() => sync(false), 800); } }
 }
 function soon(){ clearTimeout(timer); timer = setTimeout(() => sync(false), 3500); }
-MSA.alarms = { sync, plan, soon, native: () => !!LN(), electron: isEl };
+MSA.alarms = { sync: sync, plan, soon, native: () => !!LN(), electron: isEl };
 
 if (LN()) {
   const _save = MSA.save; MSA.save = function(){ const r = _save.apply(this, arguments); soon(); return r; };
@@ -70,14 +73,15 @@ async function test(){
   const ln = LN(), name = MSA.myName ? MSA.myName() : '';
   if (ln) {
     if (!await perm(ln, true)) { MSA.toast(T('إذن الإشعارات مش مفعّل — فعّله من إعدادات الموبايل', 'Notification permission is off — enable it in phone settings'), 'err', 5000); return; }
-    try { await ln.createChannel({ id: CH, name: T('تنبيهات المساعد', 'Assistant alerts'), importance: 4, visibility: 1, vibration: true }); } catch (e) {}
-    await ln.schedule({ notifications: [{ id: 99, title: T('أهلاً يا ' + name, 'Hi ' + name), body: T('ده إشعار تجريبي — اقفل التطبيق وهيظهر بعد 10 ثواني', 'Test alert — close the app and it appears in 10 seconds'), channelId: CH, schedule: { at: new Date(Date.now() + 10000), allowWhileIdle: true } }] });
+    try { await ln.createChannel(chDef()); } catch (e) {}
+    await ln.schedule({ notifications: [{ id: 99, title: T('أهلاً يا ' + name, 'Hi ' + name), body: T('ده إشعار تجريبي — اقفل التطبيق وهيظهر بعد 10 ثواني', 'Test alert — close the app and it appears in 10 seconds'), channelId: chId(), schedule: { at: new Date(Date.now() + 10000), allowWhileIdle: true } }] });
     MSA.toast(T('اقفل التطبيق دلوقتي — الإشعار هيظهر بعد 10 ثواني', 'Close the app now — the alert shows in 10 seconds'), 'ok', 6000); return;
   }
   try {
     if (!('Notification' in window)) throw 0;
     if (Notification.permission === 'default') await Notification.requestPermission();
     if (Notification.permission !== 'granted') throw 0;
+    if (MSA.sound) MSA.sound.play();
     new Notification(T('أهلاً يا ' + name, 'Hi ' + name), { body: T('الإشعارات شغّالة ✓', 'Notifications work ✓'), icon: 'icons/icon-192.png' });
   } catch (e) { MSA.toast(T('الإشعارات مش متاحة أو محجوبة في الجهاز ده', 'Notifications are unavailable or blocked on this device'), 'err', 5000); }
 }

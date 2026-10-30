@@ -73,6 +73,8 @@ function uniqueName(base, parent, exclude){
   let n = 1, cand; do { cand = base + ' ' + t('copySuffix') + (n > 1 ? ' ' + n : ''); n++; } while (names.has(cand));
   return cand;
 }
+const FAV = '__fav', favMode = () => MSA.state.ui.learnFolder === FAV;
+const favStar = (on, id) => '<button class="icon-btn sm fav-btn ' + (on ? 'on' : '') + '" data-act="fav" data-fid="' + id + '" title="' + U.esc(MSA.T(on ? 'إزالة من المفضلة' : 'إضافة للمفضلة', on ? 'Remove from favourites' : 'Add to favourites')) + '" aria-pressed="' + !!on + '">' + I('star', 'sm') + '</button>';
 const curId = () => { const c = MSA.state.ui.learnFolder; return c && folder(c) ? c : null; };
 
 /* ---------- actions ---------- */
@@ -169,7 +171,7 @@ function videoCard(v, q){
     '<div class="vthumb" style="' + (th ? 'background-image:url(\'' + U.esc(th) + '\')' : 'background:linear-gradient(135deg,#2c3e50,#4b6a88)') + '">' + (th ? '' : I('video', 'lg')) +
     '<span class="play">' + I('play') + '</span><span class="host">' + U.esc(hostOf(v.url)) + '</span></div>' +
     '<input type="checkbox" class="cb selbox ' + (on ? 'on' : '') + '" data-act="sel" ' + (on ? 'checked' : '') + ' aria-label="select">' +
-    '<div class="vbody"><div class="vtitle">' + U.esc(titleOf(v)) + '</div><div class="vsub">' + U.esc(q ? chain(v.folder).map(x => x.name).join(' / ') || t('learn.root') : (v.author || MSA.fmtDate(v.created))) + '</div></div></div>';
+    '<div class="vbody"><div class="row" style="gap:4px;align-items:flex-start"><div class="vtitle grow">' + U.esc(titleOf(v)) + '</div>' + favStar(v.fav, v.id) + '</div><div class="vsub">' + U.esc(q ? chain(v.folder).map(x => x.name).join(' / ') || t('learn.root') : (v.author || MSA.fmtDate(v.created))) + '</div></div></div>';
 }
 const cmp = (a, b) => sort === 'new' ? (b.created || 0) - (a.created || 0) : String(a.name || titleOf(a)).localeCompare(String(b.name || titleOf(b)), MSA.state.settings.lang);
 
@@ -179,9 +181,10 @@ function renderVideos(host){
   let fs, vs;
   if (q) { fs = L().folders.filter(f => f.name.toLowerCase().includes(q)); vs = L().videos.filter(v => (titleOf(v) + ' ' + v.url + ' ' + (v.note || '')).toLowerCase().includes(q)); }
   else { fs = kids(cid); vs = vids(cid); }
+  if (favMode()) { fs = []; vs = L().videos.filter(v => v.fav && (!q || (titleOf(v) + ' ' + v.url + ' ' + (v.note || '')).toLowerCase().includes(q))); }
   fs = fs.slice().sort(cmp); vs = vs.slice().sort(cmp);
-  const path = chain(cid);
-  const crumbs = '<div class="crumbs"><button data-act="crumb" data-id="" data-drop="" class="' + (!cid ? 'last' : '') + '">' + I('grad', 'sm') + ' ' + U.esc(t('learn.root')) + '</button>' +
+  const path = favMode() ? [{ id: FAV, name: '★ ' + MSA.T('المفضلة', 'Favourites') }] : chain(cid);
+  const crumbs = '<div class="crumbs"><button data-act="crumb" data-id="" data-drop="" class="' + (!cid && !favMode() ? 'last' : '') + '">' + I('grad', 'sm') + ' ' + U.esc(t('learn.root')) + '</button>' +
     path.map((f, i) => I('chev-r', 'chev') + '<button data-act="crumb" data-id="' + f.id + '" data-drop="' + f.id + '" class="' + (i === path.length - 1 ? 'last' : '') + '">' + U.esc(f.name) + '</button>').join('') + '</div>';
   const nsel = sel.size;
   let html = '<div class="page-head"><div><h1>' + I('grad', 'lg') + U.esc(t('nav.learn')) + '</h1><div class="sub">' + U.esc(t('learn.sub')) + '</div></div></div>' + crumbs +
@@ -201,9 +204,11 @@ function renderVideos(host){
       '<button class="btn sm danger" data-act="s-del">' + I('trash', 'sm') + U.esc(t('delete')) + '</button>' +
       '<button class="btn sm ghost" data-act="s-clear" style="margin-inline-start:auto">' + I('x', 'sm') + '</button></div>';
   }
-  if (!fs.length && !vs.length) html += MSA.empty(q ? 'search' : 'folder-open', q ? t('noResults') : t('learn.empty'), q ? '' : t('learn.emptySub'));
+  const favCard = !cid && !favMode() && !q ? '<div class="card fold favfold" data-favfolder="1" style="--fc:var(--warn);cursor:pointer"><div class="fi">' + I('star') + '</div><div class="grow"><div class="ft">★ ' + U.esc(MSA.T('المفضلة', 'Favourites')) + '</div><div class="fs">' + U.esc(t('itemsCount', { n: L().videos.filter(v => v.fav).length })) + '</div></div></div>' : '';
+  if (favMode() && !vs.length) html += MSA.empty('star', MSA.T('لا توجد فيديوهات مفضلة بعد', 'No favourite videos yet'), MSA.T('اضغط ★ على أي فيديو ليظهر هنا.', 'Press ★ on any video to see it here.'));
+  else if (!fs.length && !vs.length) html += (favCard ? '<div class="lgrid" style="margin-bottom:22px">' + favCard + '</div>' : '') + MSA.empty(q ? 'search' : 'folder-open', q ? t('noResults') : t('learn.empty'), q ? '' : t('learn.emptySub'));
   else {
-    if (fs.length) html += (q ? '<h3 style="margin:6px 0 10px;font-size:14px" class="muted">' + U.esc(t('folders')) + '</h3>' : '') + '<div class="lgrid ' + (selMode ? 'sel-mode' : '') + '" style="margin-bottom:22px">' + fs.map(f => folderCard(f, q)).join('') + '</div>';
+    if (fs.length || favCard) html += (q ? '<h3 style="margin:6px 0 10px;font-size:14px" class="muted">' + U.esc(t('folders')) + '</h3>' : '') + '<div class="lgrid ' + (selMode ? 'sel-mode' : '') + '" style="margin-bottom:22px">' + favCard + fs.map(f => folderCard(f, q)).join('') + '</div>';
     if (vs.length) html += (q || fs.length ? '<h3 style="margin:6px 0 10px;font-size:14px" class="muted">' + U.esc(t('videos')) + '</h3>' : '') + '<div class="lgrid ' + (selMode ? 'sel-mode' : '') + '">' + vs.map(v => videoCard(v, q)).join('') + '</div>';
   }
   host.innerHTML = html;
@@ -218,6 +223,7 @@ function bind(host){
     const one = items.length === 1, isF = it.k === 'f';
     const m = [];
     if (one) m.push({ icon: isF ? 'folder-open' : 'play', label: t('open'), onClick: () => isF ? enter(it.id) : openVideo(L().videos.find(v => v.id === it.id)) });
+    if (one && !isF) { const vv = L().videos.find(x => x.id === it.id); m.push({ icon: 'star', label: vv.fav ? MSA.T('إزالة من المفضلة', 'Remove from favourites') : MSA.T('إضافة للمفضلة', 'Add to favourites'), onClick: () => { vv.fav = !vv.fav; if (!vv.fav) delete vv.fav; MSA.save(); MSA.rerender(); } }); }
     if (one) m.push({ icon: 'pencil', label: t('rename'), onClick: () => renameItem(it.k, it.id) });
     m.push({ icon: 'copy', label: t('copy'), onClick: () => setClip('copy', items) }, { icon: 'scissors', label: t('cut'), onClick: () => setClip('cut', items) });
     if (clip && isF && one) m.push({ icon: 'paste', label: t('pasteHere'), onClick: () => pasteInto(it.id) });
@@ -228,6 +234,7 @@ function bind(host){
   };
   const enter = id => { MSA.state.ui.learnFolder = id || null; query = ''; sel.clear(); MSA.save(); MSA.rerender(false); };
   MSA.on(host, {
+    fav: el => { const v = L().videos.find(x => x.id === el.dataset.fid); if (!v) return; v.fav = !v.fav; if (!v.fav) delete v.fav; MSA.save(); MSA.rerender(); MSA.toast(v.fav ? MSA.T('أُضيف للمفضلة ★', 'Added to favourites ★') : MSA.T('أُزيل من المفضلة', 'Removed from favourites'), 'ok'); },
     addlinks: addLinks, newfolder: newFolder, paste: () => pasteInto(curId()),
     selmode: () => { selMode = !selMode; if (!selMode) sel.clear(); MSA.rerender(); },
     crumb: el => enter(el.dataset.id),
@@ -238,6 +245,7 @@ function bind(host){
     's-clear': () => { sel.clear(); selMode = false; MSA.rerender(); }
   });
   host.addEventListener('click', e => {
+    if (e.target.closest('[data-favfolder]')) { enter(FAV); return; }
     if (e.target.closest('[data-act]')) return;
     const it = itemFrom(e.target); if (!it) return;
     if (e.ctrlKey || e.metaKey || e.shiftKey || selMode) { toggleSel(it); return; }

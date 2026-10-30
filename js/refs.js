@@ -14,6 +14,8 @@ const items = pid => R().filter(r => (r.folder || null) === (pid || null));
 const chain = id => { const o = []; let f = id && folder(id); while (f) { o.unshift(f); f = f.parent && folder(f.parent); } return o; };
 const isDesc = (id, anc) => { let f = folder(id); while (f) { if (f.id === anc) return true; f = f.parent && folder(f.parent); } return false; };
 const collect = fid => { const a = [fid]; kids(fid).forEach(k => a.push(...collect(k.id))); return a; };
+const FAV = '__fav', favMode = () => S().ui.refFolder === FAV;
+const favStar = (on, act, id) => '<button class="icon-btn sm fav-btn ' + (on ? 'on' : '') + '" data-act="' + act + '" data-fid="' + id + '" title="' + esc(T(on ? 'إزالة من المفضلة' : 'إضافة للمفضلة', on ? 'Remove from favourites' : 'Add to favourites')) + '" aria-pressed="' + !!on + '">' + I('star', 'sm') + '</button>';
 const cur = () => { const c = S().ui.refFolder; return c && folder(c) ? c : null; };
 const dom = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return u || ''; } };
 const titleOf = r => r.title || (r.att ? r.att.name : dom(r.url));
@@ -80,7 +82,7 @@ function refCard(r, q){
   return '<div class="card ref ' + (on ? 'is-sel ' : '') + (cut ? 'is-cut' : '') + '" draggable="true" data-kind="r" data-id="' + r.id + '">' +
     '<input type="checkbox" class="cb selbox ' + (on ? 'on' : '') + '" data-act="sel" ' + (on ? 'checked' : '') + ' aria-label="select">' +
     (r.att ? MSA.attHTML(r.att, false) : '<a class="ref-link" data-open="' + esc(r.url) + '">' + MSA.conn.logo({ id: '', name: dom(r.url), url: r.url }) + '<span dir="ltr">' + esc(dom(r.url)) + '</span></a>') +
-    '<div class="ref-b"><b dir="auto">' + esc(titleOf(r)) + '</b>' + (q ? '<span class="hint">' + esc(chain(r.folder).map(x => x.name).join(' / ') || t('learn.root')) + '</span>' : '') + '<div class="tags">' + (r.tags || []).map(x => '<span class="tag">#' + esc(x) + '</span>').join('') + '</div></div></div>';
+    '<div class="ref-b"><div class="row" style="gap:4px;align-items:flex-start"><b dir="auto" class="grow">' + esc(titleOf(r)) + '</b>' + favStar(r.fav, 'fav', r.id) + '</div>' + (q ? '<span class="hint">' + esc(chain(r.folder).map(x => x.name).join(' / ') || t('learn.root')) + '</span>' : '') + '<div class="tags">' + (r.tags || []).map(x => '<span class="tag">#' + esc(x) + '</span>').join('') + '</div></div></div>';
 }
 
 function draw(b){
@@ -88,10 +90,11 @@ function draw(b){
   const all = new Set(); R().forEach(r => (r.tags || []).forEach(x => all.add(x)));
   let fs, rs;
   if (q) { fs = F().filter(f => f.name.toLowerCase().includes(q)); rs = R().filter(r => (titleOf(r) + ' ' + (r.tags || []).join(' ') + ' ' + (r.url || '')).toLowerCase().includes(q)); } else { fs = kids(cid); rs = items(cid); }
-  if (tag) { rs = (q ? rs : R()).filter(r => (r.tags || []).includes(tag)); fs = []; }
+  if (favMode()) { fs = []; rs = R().filter(r => r.fav && (!q || (titleOf(r) + ' ' + (r.tags || []).join(' ') + ' ' + (r.url || '')).toLowerCase().includes(q))); }
+  if (tag) { rs = (favMode() ? rs : (q ? rs : R())).filter(r => (r.tags || []).includes(tag)); fs = []; }
   fs = fs.slice().sort(cmp); rs = rs.slice().sort(cmp);
-  const path = chain(cid), nsel = sel.size;
-  let html = '<div class="crumbs"><button data-act="crumb" data-id="" data-drop="" class="' + (!cid ? 'last' : '') + '">' + I('image', 'sm') + ' ' + esc(T('المراجع', 'References')) + '</button>' + path.map((f, i) => I('chev-r', 'chev') + '<button data-act="crumb" data-id="' + f.id + '" data-drop="' + f.id + '" class="' + (i === path.length - 1 ? 'last' : '') + '">' + esc(f.name) + '</button>').join('') + '</div>' +
+  const path = favMode() ? [{ id: FAV, name: '★ ' + T('المفضلة', 'Favourites') }] : chain(cid), nsel = sel.size;
+  let html = '<div class="crumbs"><button data-act="crumb" data-id="" data-drop="" class="' + (!cid && !favMode() ? 'last' : '') + '">' + I('image', 'sm') + ' ' + esc(T('المراجع', 'References')) + '</button>' + path.map((f, i) => I('chev-r', 'chev') + '<button data-act="crumb" data-id="' + f.id + '" data-drop="' + f.id + '" class="' + (i === path.length - 1 ? 'last' : '') + '">' + esc(f.name) + '</button>').join('') + '</div>' +
     '<div class="toolbar" style="margin-top:12px"><button class="btn primary" data-act="img">' + I('image', 'sm') + esc(T('إضافة صور', 'Add images')) + '</button><button class="btn" data-act="link">' + I('link', 'sm') + esc(T('إضافة رابط', 'Add link')) + '</button>' +
     '<button class="btn" data-act="newfolder">' + I('folder-plus', 'sm') + esc(t('newFolder')) + '</button>' +
     (clip ? '<button class="btn" data-act="paste">' + I('paste', 'sm') + esc(t('paste')) + ' (' + clip.items.length + ')</button>' : '') +
@@ -103,9 +106,12 @@ function draw(b){
     html += '<div class="sel-bar"><b style="margin-inline-end:6px">' + esc(t('selected', { n: nsel })) + '</b>' + (one ? '<button class="btn sm" data-act="s-rename">' + I('pencil', 'sm') + esc(t('rename')) + '</button>' : '') +
       '<button class="btn sm" data-act="s-copy">' + I('copy', 'sm') + esc(t('copy')) + '</button><button class="btn sm" data-act="s-cut">' + I('scissors', 'sm') + esc(t('cut')) + '</button>' + (hasF ? '<button class="btn sm" data-act="s-color">' + I('palette', 'sm') + esc(t('folderColor')) + '</button>' : '') +
       '<button class="btn sm danger" data-act="s-del">' + I('trash', 'sm') + esc(t('delete')) + '</button><button class="btn sm ghost" data-act="s-clear" style="margin-inline-start:auto">' + I('x', 'sm') + '</button></div>'; }
-  if (!fs.length && !rs.length) html += MSA.empty(q || tag ? 'search' : 'image', q || tag ? t('noResults') : T('مكتبة المراجع فاضية', 'Your reference library is empty'), q || tag ? '' : T('أنشئ مجلدات (لكل مشروع أو ستايل) واحفظ فيها صور وروابط من Behance وPinterest.', 'Create folders (per project or style) and save images and links from Behance and Pinterest.'));
+  if (favMode() && !rs.length) html += MSA.empty('star', T('لا توجد مراجع مفضلة بعد', 'No favourite references yet'), T('اضغط ★ على أي صورة أو رابط ليظهر هنا.', 'Press ★ on any image or link to see it here.'));
+  else if (!fs.length && !rs.length && !(!cid && !q && !tag)) html += MSA.empty(q || tag ? 'search' : 'image', q || tag ? t('noResults') : T('مكتبة المراجع فاضية', 'Your reference library is empty'), q || tag ? '' : T('أنشئ مجلدات (لكل مشروع أو ستايل) واحفظ فيها صور وروابط من Behance وPinterest.', 'Create folders (per project or style) and save images and links from Behance and Pinterest.'));
   else {
-    if (fs.length) html += '<div class="lgrid ' + (selMode ? 'sel-mode' : '') + '" style="margin-bottom:20px">' + fs.map(f => folderCard(f, q)).join('') + '</div>';
+    const favCard = !cid && !favMode() && !q && !tag ? '<div class="card fold favfold" data-favfolder="1" style="--fc:var(--warn);cursor:pointer"><div class="fi">' + I('star') + '</div><div class="grow"><div class="ft">★ ' + esc(T('المفضلة', 'Favourites')) + '</div><div class="fs">' + esc(t('itemsCount', { n: R().filter(r => r.fav).length })) + '</div></div></div>' : '';
+    if (fs.length || favCard) html += '<div class="lgrid ' + (selMode ? 'sel-mode' : '') + '" style="margin-bottom:20px">' + favCard + fs.map(f => folderCard(f, q)).join('') + '</div>';
+    if (!fs.length && !rs.length) html += MSA.empty('image', T('مكتبة المراجع فاضية', 'Your reference library is empty'), T('أنشئ مجلدات (لكل مشروع أو ستايل) واحفظ فيها صور وروابط من Behance وPinterest.', 'Create folders (per project or style) and save images and links from Behance and Pinterest.'));
     if (rs.length) html += '<div class="ref-grid ' + (selMode ? 'sel-mode' : '') + '">' + rs.map(r => refCard(r, q)).join('') + '</div>';
   }
   b.innerHTML = html; MSA.hydrateAtts(b); bind(b);
@@ -118,6 +124,7 @@ function bind(b){
     const list = sel.has(it.k + ':' + it.id) ? selected() : [{ k: it.k, id: it.id }], one = list.length === 1, isF = it.k === 'f', r = !isF && R().find(v => v.id === it.id), m = [];
     if (one) m.push({ icon: isF ? 'folder-open' : 'external', label: t('open'), onClick: () => isF ? enter(it.id) : (r.url ? MSA.openLink(r.url) : $('[data-kind="r"][data-id="' + it.id + '"] .att', b) && $('[data-kind="r"][data-id="' + it.id + '"] .att', b).click()) });
     if (one) m.push({ icon: 'pencil', label: isF ? t('rename') : T('تعديل', 'Edit'), onClick: () => rename(it.k, it.id) });
+    if (!isF && one) m.push({ icon: 'star', label: r.fav ? T('إزالة من المفضلة', 'Remove from favourites') : T('إضافة للمفضلة', 'Add to favourites'), onClick: () => { r.fav = !r.fav; if (!r.fav) delete r.fav; redraw(); } });
     m.push({ icon: 'copy', label: t('copy'), onClick: () => setClip('copy', list) }, { icon: 'scissors', label: t('cut'), onClick: () => setClip('cut', list) });
     if (clip && isF && one) m.push({ icon: 'paste', label: t('pasteHere'), onClick: () => paste(it.id) });
     if (list.some(i => i.k === 'f')) m.push({ icon: 'palette', label: t('folderColor'), onClick: () => colorize(list) });
@@ -126,6 +133,7 @@ function bind(b){
   MSA.on(b, {
     img: async () => { const a = await MSA.addFiles('image'); if (!a.length) return; a.forEach(x => R().unshift({ id: U.uid('rf'), att: x, title: '', tags: tag ? [tag] : [], folder: cur(), created: Date.now() })); redraw(); },
     link: () => form({}, v => { R().unshift(Object.assign({ id: U.uid('rf'), folder: cur(), created: Date.now() }, v)); redraw(); }),
+    fav: el => { const r = R().find(x => x.id === el.dataset.fid); if (!r) return; r.fav = !r.fav; if (!r.fav) delete r.fav; redraw(); MSA.toast(r.fav ? T('أُضيف للمفضلة ★', 'Added to favourites ★') : T('أُزيل من المفضلة', 'Removed from favourites'), 'ok'); },
     newfolder: newFolder, paste: () => paste(cur()),
     selmode: () => { selMode = !selMode; if (!selMode) sel.clear(); redraw(); },
     crumb: el => enter(el.dataset.id),
@@ -135,6 +143,7 @@ function bind(b){
   });
   b.addEventListener('click', e => {
     const tg = e.target.closest('[data-tag]'); if (tg) { tag = tg.dataset.tag; redraw(); return; }
+    if (e.target.closest('[data-favfolder]')) { enter(FAV); return; }
     if (e.target.closest('[data-act],input,select,[data-open]')) return;
     const it = itemFrom(e.target); if (!it) return;
     if (e.ctrlKey || e.metaKey || e.shiftKey || selMode) { toggle(it); return; }

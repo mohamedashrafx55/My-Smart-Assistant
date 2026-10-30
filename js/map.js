@@ -18,7 +18,7 @@ Object.assign(MSA.dict.en, {
   'map.edit': 'Edit the grid', 'map.editDone': 'Done editing', 'map.addStage': 'New stage', 'map.resetLayout': 'Reset to default layout',
   'map.editHint': 'Drag a stage to move it · drag from a stage’s dot to another stage to draw an arrow (drop on empty space to create a new stage) · tap an arrow to delete it, flip it or drag its ends to re-route it',
   'map.stageName': 'Stage name', 'map.next1': 'New stage after this', 'map.rename': 'Rename', 'map.open': 'Open stage', 'map.del': 'Delete stage',
-  'map.arrowDel': 'Delete arrow', 'map.arrowRev': 'Flip direction', 'map.resetQ': 'Reset the positions and arrows of this project’s grid to the default layout? Your stages and files are not touched.',
+  'map.arrowDel': 'Delete arrow', 'map.arrowRev': 'Flip direction', 'map.arrowStraight': 'Reset curve', 'map.resetQ': 'Reset the positions and arrows of this project’s grid to the default layout? Your stages and files are not touched.',
   'map.resize': 'Drag to resize', 'map.color': 'Colour', 'map.bigger': 'Bigger', 'map.smaller': 'Smaller', 'map.custom': 'Custom colour', 'map.noColor': 'Default colour',
   'map.reset': 'Reset', 'map.delGroupQ': 'Delete the stage “{n}” with all its sub-stages and files?'
 });
@@ -26,7 +26,7 @@ Object.assign(MSA.dict.ar, {
   'map.edit': 'تعديل الشبكة', 'map.editDone': 'تم التعديل', 'map.addStage': 'مرحلة جديدة', 'map.resetLayout': 'إعادة الترتيب الافتراضي',
   'map.editHint': 'اسحب المرحلة لتحريكها • اسحب من نقطة المرحلة إلى مرحلة أخرى لرسم سهم (وأفلت في مكان فارغ لإنشاء مرحلة جديدة) • اضغط على سهم لحذفه أو عكسه أو اسحب طرفه لتغيير مساره',
   'map.stageName': 'اسم المرحلة', 'map.next1': 'مرحلة جديدة بعد هذه', 'map.rename': 'تغيير الاسم', 'map.open': 'فتح المرحلة', 'map.del': 'حذف المرحلة',
-  'map.arrowDel': 'حذف السهم', 'map.arrowRev': 'عكس الاتجاه', 'map.resetQ': 'إعادة مواقع المراحل والأسهم في شبكة هذا المشروع إلى الترتيب الافتراضي؟ المراحل والملفات لن تتأثر.',
+  'map.arrowDel': 'حذف السهم', 'map.arrowRev': 'عكس الاتجاه', 'map.arrowStraight': 'تصفير الانحناء', 'map.resetQ': 'إعادة مواقع المراحل والأسهم في شبكة هذا المشروع إلى الترتيب الافتراضي؟ المراحل والملفات لن تتأثر.',
   'map.resize': 'اسحب لتغيير الحجم', 'map.color': 'اللون', 'map.bigger': 'أكبر', 'map.smaller': 'أصغر', 'map.custom': 'لون مخصص', 'map.noColor': 'اللون الافتراضي',
   'map.reset': 'إعادة الترتيب', 'map.delGroupQ': 'حذف المرحلة «{n}» مع كل مراحلها الفرعية وملفاتها؟'
 });
@@ -132,7 +132,14 @@ function stepOf(L, id){ return L.frames[id] ? L.frames[id].s : (L.nodes[id] && L
 function doneOf(L, id){ const s = stepOf(L, id); return s ? P.done(s) : false; }
 
 /* where an arrow leaves and enters its two stages */
-function geom(L, a, b){
+function bez(P0, C1, C2, P3, off){
+  const o = off && off.length === 2 ? off : [0, 0], f = 4 / 3;
+  C1 = [C1[0] + o[0] * f, C1[1] + o[1] * f]; C2 = [C2[0] + o[0] * f, C2[1] + o[1] * f];
+  const r = n => Math.round(n * 10) / 10;
+  return { d: 'M' + P0[0] + ' ' + P0[1] + ' C' + r(C1[0]) + ' ' + r(C1[1]) + ' ' + r(C2[0]) + ' ' + r(C2[1]) + ' ' + P3[0] + ' ' + P3[1],
+    mx: (P0[0] + 3 * C1[0] + 3 * C2[0] + P3[0]) / 8, my: (P0[1] + 3 * C1[1] + 3 * C2[1] + P3[1]) / 8 };
+}
+function geom(L, a, b, off){
   const ra = rect(L, a), rb = rect(L, b); if (!ra || !rb) return null;
   const outs = L.E.filter(e => e[0] === a), ins = L.E.filter(e => e[1] === b);
   const io = outs.findIndex(e => e[1] === b), ii = ins.findIndex(e => e[0] === a);
@@ -143,30 +150,31 @@ function geom(L, a, b){
     if (L.frames[a]) x1 = Math.max(ra.x + 40, Math.min(ra.x + ra.w - 40, rb.x + rb.w / 2));
     x2 = rb.x + rb.w / 2 + (ins.length > 1 ? (ii - (ins.length - 1) / 2) * 56 : 0);
     y1 = ra.y + ra.h; y2 = rb.y; const k = Math.max(40, (y2 - y1) / 2);
-    d = 'M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + (y1 + k) + ' ' + x2 + ' ' + (y2 - k) + ' ' + x2 + ' ' + (y2 - 2);
-    return { x1, y1, x2, y2, d, mx: (x1 + x2) / 2, my: (y1 + y2) / 2 };
+    const bz = bez([x1, y1], [x1, y1 + k], [x2, y2 - k], [x2, y2 - 2], off);
+    return { x1, y1, x2, y2, d: bz.d, mx: bz.mx, my: bz.my };
   }
   const right = rb.x + rb.w / 2 >= ra.x + ra.w / 2;
   x1 = right ? ra.x + ra.w : ra.x; y1 = ra.y + ra.h / 2; x2 = right ? rb.x : rb.x + rb.w; y2 = rb.y + rb.h / 2;
   /* the target is beside or above: go sideways, and loop around when it sits on the same level */
   const k = Math.max(50, Math.abs(x2 - x1) / 2) * (right ? 1 : -1);
+  let bz;
   if (Math.abs(y2 - y1) < 6 && ((right && x2 - x1 < 30) || (!right && x1 - x2 < 30))) {
-    d = 'M' + x1 + ' ' + y1 + ' C' + (x1 + 70 * (right ? 1 : -1)) + ' ' + (y1 - 90) + ' ' + (x2 - 70 * (right ? 1 : -1)) + ' ' + (y2 - 90) + ' ' + x2 + ' ' + y2;
-  } else d = 'M' + x1 + ' ' + y1 + ' C' + (x1 + k) + ' ' + y1 + ' ' + (x2 - k) + ' ' + y2 + ' ' + (x2 + (right ? -2 : 2)) + ' ' + y2;
-  return { x1, y1, x2, y2, d, mx: (x1 + x2) / 2, my: (y1 + y2) / 2 };
+    bz = bez([x1, y1], [x1 + 70 * (right ? 1 : -1), y1 - 90], [x2 - 70 * (right ? 1 : -1), y2 - 90], [x2, y2], off);
+  } else bz = bez([x1, y1], [x1 + k, y1], [x2 - k, y2], [x2 + (right ? -2 : 2), y2], off);
+  return { x1, y1, x2, y2, d: bz.d, mx: bz.mx, my: bz.my };
 }
 
 function edgesSVG(L){
   let svg = '', hs = '';
-  L.E.forEach(([a, b], i) => {
-    const q = geom(L, a, b); if (!q) return;
+  L.E.forEach(([a, b, off], i) => {
+    const q = geom(L, a, b, off); if (!q) return;
     const dn = doneOf(L, a), tdn = doneOf(L, b);
     const cls = (dn ? (tdn ? 'e done' : 'e flow') : 'e') + (editing && esel_e === i ? ' sel' : '');
     const mk = dn ? (tdn ? 'mkd' : 'mkf') : 'mk';
     svg += '<path class="' + cls + '" marker-end="url(#' + mk + ')" d="' + q.d + '"/>';
     if (editing) {
       svg += '<path class="eh" data-ei="' + i + '" d="' + q.d + '"/>';
-      if (esel_e === i) hs += '<circle class="ehd" data-eh="src" cx="' + q.x1 + '" cy="' + q.y1 + '" r="9"/><circle class="ehd" data-eh="dst" cx="' + q.x2 + '" cy="' + q.y2 + '" r="9"/>';
+      if (esel_e === i) hs += '<circle class="ehd bend" data-eh="bend" cx="' + q.mx + '" cy="' + q.my + '" r="8"/><circle class="ehd" data-eh="src" cx="' + q.x1 + '" cy="' + q.y1 + '" r="9"/><circle class="ehd" data-eh="dst" cx="' + q.x2 + '" cy="' + q.y2 + '" r="9"/>';
     }
   });
   const mkr = (id, c) => '<marker id="' + id + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M1 1L9 5L1 9z" fill="' + c + '"/></marker>';
@@ -222,8 +230,8 @@ function toolHTML(L){
     return '<div class="metool" style="left:' + (r.x + r.w / 2) + 'px;top:' + (r.y - 8) + 'px">' + b('rename', 'pencil', t('map.rename')) + b('color', 'palette', t('map.color'), colorOpen ? 'on' : '') + (isF ? '' : b('small', 'minus', t('map.smaller')) + b('big', 'plus', t('map.bigger'))) + b('next', 'plus', t('map.next1')) + b('open', 'maximize', t('map.open')) + b('del', 'trash', t('map.del'), 'danger') + pal + '</div>';
   }
   if (esel_e >= 0 && L.E[esel_e]) {
-    const q = geom(L, L.E[esel_e][0], L.E[esel_e][1]);
-    if (q) return '<div class="metool" style="left:' + q.mx + 'px;top:' + (q.my - 4) + 'px">' + b('erev', 'repeat', t('map.arrowRev')) + b('edel', 'trash', t('map.arrowDel'), 'danger') + '</div>';
+    const q = geom(L, L.E[esel_e][0], L.E[esel_e][1], L.E[esel_e][2]);
+    if (q) return '<div class="metool" style="left:' + q.mx + 'px;top:' + (q.my - 4) + 'px">' + b('erev', 'repeat', t('map.arrowRev')) + (L.E[esel_e][2] ? b('estr', 'undo', t('map.arrowStraight')) : '') + b('edel', 'trash', t('map.arrowDel'), 'danger') + '</div>';
   }
   return '';
 }
@@ -317,6 +325,7 @@ P.renderMap = function(box, p){
         const id = nd.dataset.node, r = rect(L, id), pt = port.classList.contains('t') ? [r.x + r.w / 2, r.y] : port.classList.contains('l') ? [r.x, r.y + r.h / 2] : port.classList.contains('r') ? [r.x + r.w, r.y + r.h / 2] : [r.x + r.w / 2, r.y + r.h];
         drag = { type: 'conn', from: id, p0: pt }; moved = true; el.setPointerCapture(e.pointerId); e.preventDefault(); return;
       }
+      if (eh && eh.dataset.eh === 'bend' && esel_e >= 0 && ptrs.size === 0) { const ed0 = p.graph.edges[esel_e]; drag = { type: 'bend', i: esel_e, w0: toWorld(e), o0: (ed0[2] || [0, 0]).slice() }; moved = true; el.setPointerCapture(e.pointerId); e.preventDefault(); return; }
       if (eh && esel_e >= 0 && ptrs.size === 0) { drag = { type: 'reconn', end: eh.dataset.eh, i: esel_e }; moved = true; el.setPointerCapture(e.pointerId); e.preventDefault(); return; }
       if (eHit && !nd && ptrs.size === 0) { esel_e = +eHit.dataset.ei; esel = null; live(); sel = null; moved = true; setTimeout(() => { moved = false; }, 0); e.preventDefault(); return; }
       if (nd && ptrs.size === 0) {
@@ -332,9 +341,10 @@ P.renderMap = function(box, p){
   });
   el.addEventListener('pointermove', e => {
     if (drag && drag.type === 'resize') { const w = toWorld(e); p.graph.dim[drag.id] = [Math.max(MINW, Math.min(MAXW, snap(drag.d0[0] + w.x - drag.w0.x))), Math.max(MINH, Math.min(MAXH, snap(drag.d0[1] + w.y - drag.w0.y)))]; live(); return; }
+    if (drag && drag.type === 'bend') { const ed = p.graph.edges[drag.i]; if (!ed) return; const w = toWorld(e); ed[2] = [Math.round(drag.o0[0] + w.x - drag.w0.x), Math.round(drag.o0[1] + w.y - drag.w0.y)]; live(); return; }
     if (drag && drag.type === 'conn') { const w = toWorld(e); tempPath(drag.p0[0], drag.p0[1], w.x, w.y); el.classList.toggle('dropok', !!nodeAt(e)); return; }
     if (drag && drag.type === 'reconn') {
-      const ed = L.E[drag.i]; if (!ed) return; const q = geom(L, ed[0], ed[1]); if (!q) return; const w = toWorld(e);
+      const ed = L.E[drag.i]; if (!ed) return; const q = geom(L, ed[0], ed[1], ed[2]); if (!q) return; const w = toWorld(e);
       if (drag.end === 'dst') tempPath(q.x1, q.y1, w.x, w.y); else tempPath(w.x, w.y, q.x2, q.y2);
       el.classList.toggle('dropok', !!nodeAt(e)); return;
     }
@@ -360,6 +370,7 @@ P.renderMap = function(box, p){
     if (moved) { view.x = start.vx + dx; view.y = start.vy + dy; apply(); }
   });
   const up = async e => {
+    if (drag && drag.type === 'bend') { const ed = p.graph.edges[drag.i]; drag = null; if (ed && ed[2] && Math.abs(ed[2][0]) < 6 && Math.abs(ed[2][1]) < 6) ed.length = 2; commit(); redo(); setTimeout(() => { moved = false; }, 0); return; }
     if (drag && drag.type === 'resize') { drag = null; commit(); redo(); setTimeout(() => { moved = false; }, 0); return; }
     if (drag && (drag.type === 'conn' || drag.type === 'reconn')) {
       const d = drag; drag = null; rm(); el.classList.remove('dropok'); const target = nodeAt(e), w = toWorld(e);
@@ -408,6 +419,7 @@ P.renderMap = function(box, p){
       esel = null; commit(); MSA.updateCounts && MSA.updateCounts(); MSA.rerender();
     }
     else if (a === 'edel' && esel_e >= 0) { p.graph.edges.splice(esel_e, 1); esel_e = -1; commit(); redo(); }
+    else if (a === 'estr' && esel_e >= 0) { p.graph.edges[esel_e].length = 2; commit(); redo(); }
     else if (a === 'erev' && esel_e >= 0) { const e = p.graph.edges[esel_e]; p.graph.edges[esel_e] = [e[1], e[0]]; commit(); redo(); }
   };
   el.addEventListener('input', e => { const ci = e.target.closest('[data-cc]'); if (!ci || !esel) return; p.graph.col[esel] = ci.value; const n = world.querySelector('[data-node="' + esel + '"]'); if (n) { n.style.setProperty('--nc', ci.value); n.classList.add('cc'); } });
