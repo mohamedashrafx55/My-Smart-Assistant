@@ -6,6 +6,8 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -25,6 +27,10 @@ jobs:
           mkdir -p build/www
           rsync -a --exclude='.git' --exclude='.github' --exclude='build' --exclude='*.md' --exclude='*.zip' ./ build/www/
           test -f build/www/index.html
+          sed -i "s/n: 0/n: ${RUN}/; s/platform: 'web'/platform: 'android'/" build/www/js/buildinfo.js
+          grep -n 'MSA.build' build/www/js/buildinfo.js
+        env:
+          RUN: ${{ github.run_number }}
 
       - name: Create Capacitor project
         working-directory: build
@@ -132,3 +138,12 @@ jobs:
           name: My-Smart-Assistant-apk
           path: build/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Publish GitHub Release (so the app can find updates)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.run_number }}
+        run: |
+          cp build/android/app/build/outputs/apk/debug/app-debug.apk My-Smart-Assistant.apk
+          printf 'Android build %s\n\n%s\n' "$RUN" "$(git log -1 --pretty=%B)" > notes.md
+          gh release create "android-$RUN" My-Smart-Assistant.apk --title "Android build $RUN" --notes-file notes.md --target "$GITHUB_SHA"

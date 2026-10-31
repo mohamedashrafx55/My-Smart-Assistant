@@ -6,6 +6,8 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: write
     runs-on: windows-latest
     timeout-minutes: 40
     defaults:
@@ -23,6 +25,10 @@ jobs:
           mkdir -p build/www
           tar --exclude=./.git --exclude=./.github --exclude=./build --exclude='*.md' --exclude='*.zip' -cf - . | (cd build/www && tar -xf -)
           test -f build/www/index.html
+          sed -i "s/n: 0/n: ${RUN}/; s/platform: 'web'/platform: 'windows'/" build/www/js/buildinfo.js
+          grep -n 'MSA.build' build/www/js/buildinfo.js
+        env:
+          RUN: ${{ github.run_number }}
 
       - name: Create desktop app files
         working-directory: build
@@ -38,7 +44,7 @@ jobs:
               "appId": "com.mysmartassistant.app",
               "productName": "My Smart Assistant",
               "directories": { "output": "dist" },
-              "files": ["main.js", "www/**/*"],
+              "files": ["main.js", "preload.js", "www/**/*"],
               "win": { "target": "nsis", "icon": "www/icons/icon-512.png" },
               "nsis": {
                 "oneClick": false,
@@ -52,8 +58,14 @@ jobs:
             }
           }
           JSON
+          cat > preload.js <<'JS'
+          const { contextBridge, ipcRenderer } = require('electron');
+          contextBridge.exposeInMainWorld('msaDesktop', { installUpdate: (url) => ipcRenderer.invoke('msa-update', url) });
+          JS
+          node --check preload.js
           cat > main.js <<'JS'
-          const { app, BrowserWindow, Tray, Menu, shell, nativeImage } = require('electron');
+          const { app, BrowserWindow, Tray, Menu, shell, nativeImage, ipcMain, net } = require('electron');
+          const os = require('os');
           const path = require('path');
           const fs = require('fs');
 
@@ -77,7 +89,7 @@ jobs:
               autoHideMenuBar: true,
               backgroundColor: '#0f0f10',
               icon: path.join(__dirname, 'www/icons/icon-512.png'),
-              webPreferences: { backgroundThrottling: false, contextIsolation: true, nodeIntegration: false, spellcheck: false }
+              webPreferences: { backgroundThrottling: false, contextIsolation: true, nodeIntegration: false, spellcheck: false, preload: path.join(__dirname, 'preload.js') }
             });
             win.setMenuBarVisibility(false);
             win.loadFile(path.join(__dirname, 'www/index.html'));
@@ -90,6 +102,23 @@ jobs:
             });
             win.on('close', (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });
           }
+
+          /* in-app update: download the installer from this project's GitHub Releases and start it */
+          ipcMain.handle('msa-update', async (_e, url) => {
+            try {
+              if (typeof url !== 'string' || !url.startsWith('https://github.com/mohamedashrafx55/My-Smart-Assistant/releases/download/') || !/\.exe$/i.test(url)) return { ok: false, error: 'bad url' };
+              const res = await net.fetch(url);
+              if (!res.ok) return { ok: false, error: 'http ' + res.status };
+              const buf = Buffer.from(await res.arrayBuffer());
+              if (buf.length < 1000000) return { ok: false, error: 'too small' };
+              const file = path.join(os.tmpdir(), 'My-Smart-Assistant-Setup-update.exe');
+              fs.writeFileSync(file, buf);
+              const err = await shell.openPath(file);
+              if (err) return { ok: false, error: err };
+              setTimeout(() => { quitting = true; app.quit(); }, 1500);
+              return { ok: true };
+            } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+          });
 
           app.on('second-instance', showWindow);
           app.on('before-quit', () => { quitting = true; });
@@ -133,3 +162,11 @@ jobs:
           name: My-Smart-Assistant-windows
           path: build/dist/My-Smart-Assistant-Setup.exe
           if-no-files-found: error
+
+      - name: Publish GitHub Release (so the app can find updates)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.run_number }}
+        run: |
+          printf 'Windows build %s\n\n%s\n' "$RUN" "$(git log -1 --pretty=%B)" > notes.md
+          gh release create "windows-$RUN" build/dist/My-Smart-Assistant-Setup.exe --title "Windows build $RUN" --notes-file notes.md --target "$GITHUB_SHA"
