@@ -5,7 +5,7 @@ const t = (k, v) => MSA.t(k, v);
 Object.assign(MSA.dict.en, {
   's.perms': 'Permissions', 'perm.hint': 'Allow only what you need. Everything stays on your device — nothing is uploaded.',
   'perm.granted': 'Allowed', 'perm.denied': 'Blocked', 'perm.prompt': 'Not asked yet', 'perm.ask': 'On request', 'perm.unsupported': 'Not available here',
-  'perm.allow': 'Allow', 'perm.recheck': 'Refresh', 'perm.blockedHelp': 'Blocked — enable it from the app / browser site settings, then press Refresh.',
+  'perm.sysHelp': 'The system refused. Open the phone Settings → Apps → My Smart Assistant → Permissions, allow it, then come back and press Refresh.', 'perm.allow': 'Allow', 'perm.recheck': 'Refresh', 'perm.blockedHelp': 'Blocked — enable it from the app / browser site settings, then press Refresh.',
   'perm.storage': 'Internal storage', 'perm.storage.d': 'Keeps your projects, files and notes safe from being cleared automatically, and lets you pick files from the device.',
   'perm.notifications': 'Notifications', 'perm.notifications.d': 'Task reminders and deadlines.',
   'perm.camera': 'Camera', 'perm.camera.d': 'Capture photos and videos straight into a project step or a task.',
@@ -19,7 +19,7 @@ Object.assign(MSA.dict.en, {
 Object.assign(MSA.dict.ar, {
   's.perms': 'الأذونات', 'perm.hint': 'اسمح فقط بما تحتاجه. كل شيء يبقى على جهازك ولا يُرفع لأي مكان.',
   'perm.granted': 'مسموح', 'perm.denied': 'محظور', 'perm.prompt': 'لم يُطلب بعد', 'perm.ask': 'عند الطلب', 'perm.unsupported': 'غير متاح هنا',
-  'perm.allow': 'سماح', 'perm.recheck': 'تحديث', 'perm.blockedHelp': 'محظور — فعّله من إعدادات الموقع / التطبيق في الجهاز ثم اضغط تحديث.',
+  'perm.sysHelp': 'النظام رفض الطلب. افتح إعدادات الهاتف ← التطبيقات ← My Smart Assistant ← الأذونات، فعّل الإذن ثم ارجع واضغط تحديث.', 'perm.allow': 'سماح', 'perm.recheck': 'تحديث', 'perm.blockedHelp': 'محظور — فعّله من إعدادات الموقع / التطبيق في الجهاز ثم اضغط تحديث.',
   'perm.storage': 'مساحة التخزين الداخلية', 'perm.storage.d': 'تحمي مشاريعك وملفاتك وملاحظاتك من المسح التلقائي، وتتيح اختيار الملفات من الجهاز.',
   'perm.notifications': 'الإشعارات', 'perm.notifications.d': 'تنبيهات المهام والمواعيد النهائية.',
   'perm.camera': 'الكاميرا', 'perm.camera.d': 'التقاط صور وفيديو مباشرة داخل خطوة في مشروع أو مهمة.',
@@ -35,6 +35,10 @@ const LIST = [
   ['storage', 'folder'], ['notifications', 'bell'], ['camera', 'video'], ['microphone', 'music'], ['location', 'pinmap'], ['contacts', 'user'], ['clipboard', 'clip']
 ];
 const stopStream = s => { try { s.getTracks().forEach(x => x.stop()); } catch (e) {} };
+const NAT = n => { try { return MSA.native ? MSA.native(n) : null; } catch (e) { return null; } };
+const isNat = () => !!NAT('App');
+/* inside the Android app the WebView's own permissions.query is not reliable, so 'denied' there is only a hint */
+const qn = async name => { const r = await q(name); return isNat() && (r === 'denied' || r === null) ? 'prompt' : r; };
 const q = async name => { try { return (await navigator.permissions.query({ name })).state; } catch (e) { return null; } };
 const media = async (c) => { const s = await navigator.mediaDevices.getUserMedia(c); stopStream(s); };
 
@@ -46,21 +50,21 @@ const API = {
     request: async () => { await navigator.storage.persist(); }
   },
   notifications: {
-    supported: () => 'Notification' in window,
-    state: async () => ({ granted: 'granted', denied: 'denied', default: 'prompt' })[Notification.permission] || 'prompt',
-    request: async () => { await Notification.requestPermission(); }
+    supported: () => 'Notification' in window || !!NAT('LocalNotifications'),
+    state: async () => { const ln = NAT('LocalNotifications'); if (ln) { try { const r = await ln.checkPermissions(); return r.display === 'granted' ? 'granted' : r.display === 'denied' ? 'denied' : 'prompt'; } catch (e) {} } return ({ granted: 'granted', denied: 'denied', default: 'prompt' })[Notification.permission] || 'prompt'; },
+    request: async () => { const ln = NAT('LocalNotifications'); if (ln) { const r = await ln.requestPermissions(); if (r.display !== 'granted') throw new Error('denied'); return; } await Notification.requestPermission(); }
   },
   camera: {
     supported: () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-    state: async () => (await q('camera')) || 'ask', request: () => media({ video: true })
+    state: async () => (await qn('camera')) || 'ask', request: () => media({ video: true })
   },
   microphone: {
     supported: () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-    state: async () => (await q('microphone')) || 'ask', request: () => media({ audio: true })
+    state: async () => (await qn('microphone')) || 'ask', request: () => media({ audio: true })
   },
   location: {
     supported: () => !!navigator.geolocation,
-    state: async () => (await q('geolocation')) || 'ask',
+    state: async () => (await qn('geolocation')) || 'ask',
     request: () => new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 15000, maximumAge: 600000 }))
   },
   contacts: {
@@ -74,8 +78,9 @@ const API = {
     }
   },
   clipboard: {
-    supported: () => !!(navigator.clipboard && navigator.clipboard.readText),
-    state: async () => (await q('clipboard-read')) || 'ask', request: async () => { await navigator.clipboard.readText(); }
+    supported: () => !!(NAT('Clipboard') || (navigator.clipboard && navigator.clipboard.readText)),
+    state: async () => isNat() ? 'ask' : ((await q('clipboard-read')) || 'ask'),
+    request: async () => { const cp = NAT('Clipboard'); if (cp) { await cp.read(); return; } await navigator.clipboard.readText(); }
   }
 };
 
@@ -94,7 +99,7 @@ MSA.wirePerms = function(root){
     let st = 'unsupported'; try { if (a.supported()) st = await a.state(); } catch (e) { st = 'ask'; }
     const badge = $('.pbadge', row), btn = $('[data-perm-go]', row), x = $('.perm-x', row);
     badge.className = 'pbadge ' + st; badge.textContent = t('perm.' + st);
-    x.textContent = ''; btn.hidden = st === 'unsupported' || st === 'denied' || (st === 'granted' && id !== 'contacts');
+    x.textContent = ''; btn.hidden = st === 'unsupported' || (st === 'denied' && !isNat()) || (st === 'granted' && id !== 'contacts');
     btn.textContent = id === 'contacts' ? t('perm.pick') : t('perm.allow');
     if (st === 'denied') x.textContent = t('perm.blockedHelp');
     if (id === 'storage' && navigator.storage && navigator.storage.estimate) {
@@ -106,7 +111,7 @@ MSA.wirePerms = function(root){
     const b = e.target.closest('[data-perm-go]'); if (!b) return; const id = b.closest('[data-perm]').dataset.perm;
     b.disabled = true;
     try { await API[id].request(); if (id !== 'contacts') MSA.toast(t('perm.testOk'), 'ok'); }
-    catch (err) { if (!(err && err.name === 'AbortError')) MSA.toast(t('perm.testFail'), 'err'); }
+    catch (err) { if (!(err && err.name === 'AbortError')) { MSA.toast(t('perm.testFail'), 'err'); const xx = $('.perm-x', b.closest('[data-perm]')); if (xx && isNat()) { b.disabled = false; await paint(id); xx.textContent = t('perm.sysHelp') + (err && (err.name || err.message) ? ' (' + (err.name || err.message) + ')' : ''); return; } } }
     b.disabled = false; paint(id);
   });
   all();

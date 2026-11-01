@@ -1106,3 +1106,30 @@ html.bd-open body{overflow:hidden}
 .pf-t b{font-size:14px}
 .pf-card p{margin:6px 0 0;font-size:13.5px;line-height:1.8;color:var(--text)}
 .pf-mist{margin:0;padding-inline-start:20px;display:grid;gap:5px;font-size:13.5px;line-height:1.7}
+
+/* splash: hold the intro until boot is done (JS adds .go; fallback below), and a light version for phones / the app */
+#splash:not(.go) *,#splash:not(.go)::before{animation-play-state:paused!important}
+@keyframes splashgo{to{opacity:1}}
+.lite #splash{clip-path:none;will-change:opacity}
+.lite #splash.out{animation:splashfade .6s ease forwards}
+.lite #splash.out .splash-stage{animation:none}
+@keyframes splashfade{to{opacity:0;visibility:hidden}}
+.lite #splash::before{animation:none;inset:0}
+.lite .splash-grain,.lite .splash-beams,.lite .splash-wave,.lite .splash-shine,.lite .splash-ring .r2{display:none}
+.lite .splash-parts i:nth-child(n+6){display:none}
+.lite .splash-glow,.lite .splash-mark,.lite .splash-orbit,.lite .splash-text,.lite .splash-hi,.lite .splash-title span{will-change:transform,opacity}
+.lite .splash-glow{animation:glow 2.4s var(--ease) .2s forwards}
+.lite .splash-ring .r1{filter:none}
+.lite .splash-mark{filter:none;animation:markin-l 1s var(--spring) .5s forwards,float 4.2s ease-in-out 1.8s infinite}
+.lite .splash-mark-img{filter:none}
+@keyframes markin-l{0%{opacity:0;transform:scale(.3) rotate(-20deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+.lite .splash-title span{filter:none;animation:letter-l .5s var(--spring) calc(1.7s + var(--i)*.03s) forwards}
+@keyframes letter-l{to{opacity:1;transform:none}}
+.lite .splash-hi{filter:none;animation:hi-l .7s var(--ease) 2.3s forwards}
+.lite .splash-hi b{animation:none}
+@keyframes hi-l{to{opacity:1;transform:none}}
+.lite .splash-text{clip-path:none;animation:text-l .8s var(--ease) 1.3s forwards}
+@keyframes text-l{to{opacity:1;transform:none}}
+.lite .splash-rule{animation:rule .8s var(--ease) 1.6s forwards}
+.lite .splash-bar{animation:fadein .3s ease 1.9s forwards}
+.lite .splash-bar i{animation:bar 1.8s cubic-bezier(.6,0,.2,1) 2s forwards}

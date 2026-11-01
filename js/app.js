@@ -74,10 +74,12 @@ function runSplash(){
   const tt = $('.splash-title', sp); if (tt && !tt.querySelector('span')) { tt.innerHTML = Array.from(tt.dataset.t || tt.textContent).map((ch, i) => '<span style="--i:' + i + '">' + (ch === ' ' ? ' ' : ch) + '</span>').join(''); }
   const hi = $('#splashHi', sp); if (hi) hi.innerHTML = (S().settings.lang === 'en' ? 'Welcome back, ' : 'أهلاً بعودتك يا ') + '<b>' + MSA.u.esc(MSA.myName()) + '</b>';
   const finish = () => { if (finished) return; finished = true; $('#app').hidden = false; sp.classList.add('out'); setTimeout(() => sp.remove(), 1000); document.removeEventListener('keydown', finish); };
+  /* start the intro only after the heavy boot work, so the animation is not starved */
+  requestAnimationFrame(() => requestAnimationFrame(() => sp.classList.add('go')));
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (S().settings.intro === false || reduce) { setTimeout(finish, reduce ? 500 : 40); return; }
   sp.addEventListener('click', finish); document.addEventListener('keydown', finish);
-  setTimeout(finish, 5200);
+  setTimeout(finish, 5800);
 }
 
 /* ---------- boot ---------- */
