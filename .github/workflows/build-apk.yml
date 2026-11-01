@@ -51,7 +51,7 @@ jobs:
           p='android/app/src/main/AndroidManifest.xml'
           s=open(p,encoding='utf-8').read()
           add=''
-          for perm in ['POST_NOTIFICATIONS','SCHEDULE_EXACT_ALARM','RECEIVE_BOOT_COMPLETED','USE_BIOMETRIC','VIBRATE','CAMERA','RECORD_AUDIO','MODIFY_AUDIO_SETTINGS','ACCESS_FINE_LOCATION','ACCESS_COARSE_LOCATION']:
+          for perm in ['POST_NOTIFICATIONS','SCHEDULE_EXACT_ALARM','RECEIVE_BOOT_COMPLETED','USE_BIOMETRIC','VIBRATE','REQUEST_INSTALL_PACKAGES','CAMERA','RECORD_AUDIO','MODIFY_AUDIO_SETTINGS','ACCESS_FINE_LOCATION','ACCESS_COARSE_LOCATION']:
               if 'android.permission.'+perm not in s:
                   add+='    <uses-permission android:name="android.permission.%s"/>\n'%perm
           for feat in ['camera','camera.autofocus','microphone','location']:
@@ -91,6 +91,190 @@ jobs:
           PY
         env:
           RUN: ${{ github.run_number }}
+
+      - name: In-app updater plugin (download the APK inside the app and open the installer)
+        working-directory: build
+        run: |
+          d=android/app/src/main/java/com/mysmartassistant/app
+          test -f $d/MainActivity.java
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/msa_update_paths.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths>
+              <cache-path name="updates" path="updates/" />
+          </paths>
+          XML
+          cat > $d/MsaFileProvider.java <<'JAVA'
+          package com.mysmartassistant.app;
+
+          import androidx.core.content.FileProvider;
+
+          public class MsaFileProvider extends FileProvider {
+          }
+          JAVA
+          cat > $d/MainActivity.java <<'JAVA'
+          package com.mysmartassistant.app;
+
+          import android.os.Bundle;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  registerPlugin(ApkInstaller.class);
+                  super.onCreate(savedInstanceState);
+              }
+          }
+          JAVA
+          cat > $d/ApkInstaller.java <<'JAVA'
+          package com.mysmartassistant.app;
+
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.provider.Settings;
+          import androidx.core.content.FileProvider;
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+          import java.io.File;
+          import java.io.FileOutputStream;
+          import java.io.InputStream;
+          import java.io.OutputStream;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+
+          @CapacitorPlugin(name = "ApkInstaller")
+          public class ApkInstaller extends Plugin {
+              private volatile boolean busy = false;
+
+              @PluginMethod
+              public void canInstall(PluginCall call) {
+                  boolean ok = Build.VERSION.SDK_INT < 26 || getContext().getPackageManager().canRequestPackageInstalls();
+                  JSObject r = new JSObject();
+                  r.put("allowed", ok);
+                  call.resolve(r);
+              }
+
+              @PluginMethod
+              public void openSettings(PluginCall call) {
+                  try {
+                      Intent i = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getContext().getPackageName()));
+                      i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                      getContext().startActivity(i);
+                      call.resolve();
+                  } catch (Exception e) {
+                      call.reject(String.valueOf(e.getMessage()));
+                  }
+              }
+
+              @PluginMethod
+              public void download(final PluginCall call) {
+                  final String url = call.getString("url");
+                  if (url == null || !url.startsWith("https://github.com/mohamedashrafx55/My-Smart-Assistant/releases/download/") || !url.toLowerCase().endsWith(".apk")) {
+                      call.reject("bad url");
+                      return;
+                  }
+                  if (busy) {
+                      call.reject("busy");
+                      return;
+                  }
+                  busy = true;
+                  new Thread(new Runnable() {
+                      @Override
+                      public void run() {
+                          HttpURLConnection c = null;
+                          try {
+                              File dir = new File(getContext().getCacheDir(), "updates");
+                              dir.mkdirs();
+                              File out = new File(dir, "update.apk");
+                              if (out.exists()) out.delete();
+                              c = (HttpURLConnection) new URL(url).openConnection();
+                              c.setConnectTimeout(20000);
+                              c.setReadTimeout(30000);
+                              c.setInstanceFollowRedirects(true);
+                              c.setRequestProperty("User-Agent", "MySmartAssistant");
+                              int code = c.getResponseCode();
+                              if (code != 200) {
+                                  call.reject("http " + code);
+                                  return;
+                              }
+                              int total = c.getContentLength();
+                              InputStream in = c.getInputStream();
+                              OutputStream os = new FileOutputStream(out);
+                              byte[] buf = new byte[32768];
+                              long done = 0;
+                              int lastPct = -1;
+                              int n;
+                              while ((n = in.read(buf)) != -1) {
+                                  os.write(buf, 0, n);
+                                  done += n;
+                                  if (total > 0) {
+                                      int pct = (int) (done * 100 / total);
+                                      if (pct != lastPct) {
+                                          lastPct = pct;
+                                          JSObject p = new JSObject();
+                                          p.put("percent", pct);
+                                          p.put("bytes", done);
+                                          p.put("total", total);
+                                          notifyListeners("progress", p);
+                                      }
+                                  }
+                              }
+                              os.close();
+                              in.close();
+                              if (out.length() < 1000000) {
+                                  out.delete();
+                                  call.reject("too small");
+                                  return;
+                              }
+                              JSObject r = new JSObject();
+                              r.put("path", out.getAbsolutePath());
+                              call.resolve(r);
+                          } catch (Exception e) {
+                              call.reject(String.valueOf(e.getMessage()));
+                          } finally {
+                              busy = false;
+                              if (c != null) c.disconnect();
+                          }
+                      }
+                  }).start();
+              }
+
+              @PluginMethod
+              public void install(PluginCall call) {
+                  try {
+                      String path = call.getString("path");
+                      File f = new File(path == null ? "" : path);
+                      File base = new File(getContext().getCacheDir(), "updates");
+                      if (!f.exists() || !f.getCanonicalPath().startsWith(base.getCanonicalPath())) {
+                          call.reject("bad path");
+                          return;
+                      }
+                      Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".msaupdate", f);
+                      Intent i = new Intent(Intent.ACTION_VIEW);
+                      i.setDataAndType(uri, "application/vnd.android.package-archive");
+                      i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                      getContext().startActivity(i);
+                      call.resolve();
+                  } catch (Exception e) {
+                      call.reject(String.valueOf(e.getMessage()));
+                  }
+              }
+          }
+          JAVA
+          python3 - <<'PY'
+          p='android/app/src/main/AndroidManifest.xml'
+          s=open(p,encoding='utf-8').read()
+          prov='    <provider android:name="com.mysmartassistant.app.MsaFileProvider" android:authorities="${applicationId}.msaupdate" android:exported="false" android:grantUriPermissions="true">\n        <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/msa_update_paths"/>\n    </provider>\n'
+          if 'msaupdate' not in s:
+              assert '</application>' in s
+              s=s.replace('</application>',prov+'</application>',1)
+          open(p,'w',encoding='utf-8').write(s)
+          PY
+          grep -n "msaupdate\|REQUEST_INSTALL" android/app/src/main/AndroidManifest.xml
 
       - name: Notification sounds (5 tones into res/raw)
         working-directory: build

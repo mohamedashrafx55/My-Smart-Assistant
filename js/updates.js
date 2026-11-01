@@ -57,11 +57,36 @@ function bar(res){
 }
 async function install(res, ui){
   if (res.web) { location.reload(); return; }
-  const info = res.info, p = plat(), note = ui && ui.querySelector('.ub-t');
+  const info = res.info, p = plat();
+  const nEl = (ui && ui.querySelector('.ub-t')) || document.querySelector('#updBar .ub-t') || document.getElementById('updStat');
+  const note = nEl ? { set textContent(v) { nEl.textContent = v; } } : null;
   if (p === 'windows' && window.msaDesktop && window.msaDesktop.installUpdate) {
     if (note) note.textContent = T('جاري تنزيل التحديث…', 'Downloading the update…'); MSA.toast(T('جاري تنزيل التحديث… سيُغلق البرنامج ويبدأ التثبيت', 'Downloading… the app will close and the installer will start'), 'ok', 6000);
     try { const r = await window.msaDesktop.installUpdate(info.url); if (r && r.ok) return; } catch (e) {}
     MSA.toast(T('تعذّر التثبيت التلقائي — هيتفتح رابط التحميل', 'Automatic install failed — opening the download page'), 'err', 5000); MSA.openLink(info.page); return;
+  }
+  /* Android, inside the app: download the APK here (with progress), then open the system installer */
+  const AI = p === 'android' && MSA.native && MSA.native('ApkInstaller');
+  if (AI) {
+    let h = null;
+    try {
+      const can = await AI.canInstall();
+      if (can && can.allowed === false) {
+        MSA.toast(T('فعّل «السماح بتثبيت التطبيقات» لـ My Smart Assistant في الشاشة اللي هتفتح، ثم ارجع واضغط «تحديث» تاني.', 'Turn on “Allow installing apps” for My Smart Assistant on the screen that opens, then come back and press Update again.'), 'ok', 9000);
+        await AI.openSettings(); return;
+      }
+      if (note) note.textContent = T('جاري تنزيل التحديث… 0%', 'Downloading the update… 0%');
+      try { h = await AI.addListener('progress', e => { if (note && e && e.percent != null) note.textContent = T('جاري تنزيل التحديث… ', 'Downloading the update… ') + e.percent + '%'; }); } catch (e) {}
+      const r = await AI.download({ url: info.url });
+      if (h && h.remove) h.remove(); h = null;
+      if (note) note.textContent = T('تم التنزيل — اضغط «تثبيت» في الشاشة اللي ظهرت', 'Downloaded — tap “Install” on the screen that appeared');
+      await AI.install({ path: r.path });
+      return;
+    } catch (e) {
+      try { if (h && h.remove) h.remove(); } catch (x) {}
+      if (note) note.textContent = T('نسخة جديدة متاحة', 'A new version is available');
+      MSA.toast(T('تعذّر التنزيل داخل التطبيق — هيتفتح رابط التحميل في المتصفح', 'In-app download failed — opening the download link in the browser'), 'err', 5000);
+    }
   }
   /* Android: hand the link to the system browser (normal download + notification). The in-app browser tab gets stuck on "Downloading…". */
   const AL = MSA.native && MSA.native('AppLauncher');
