@@ -63,7 +63,11 @@ async function install(res, ui){
     try { const r = await window.msaDesktop.installUpdate(info.url); if (r && r.ok) return; } catch (e) {}
     MSA.toast(T('تعذّر التثبيت التلقائي — هيتفتح رابط التحميل', 'Automatic install failed — opening the download page'), 'err', 5000); MSA.openLink(info.page); return;
   }
-  MSA.openLink(info.url);
+  /* Android: hand the link to the system browser (normal download + notification). The in-app browser tab gets stuck on "Downloading…". */
+  const AL = MSA.native && MSA.native('AppLauncher');
+  let handed = false;
+  if (p === 'android' && AL && AL.openUrl) { try { await AL.openUrl({ url: info.url }); handed = true; } catch (e) {} }
+  if (!handed) MSA.openLink(info.url);
   MSA.toast(T('هينزل الملف — افتحه من إشعارات التحميل واضغط «تثبيت». لو طلب إذن، اسمح بالتثبيت من المتصفح.', 'The file will download — open it from the download notification and tap Install. If asked, allow installs from the browser.'), 'ok', 9000);
 }
 
