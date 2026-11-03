@@ -14,7 +14,7 @@ Object.assign(MSA.dict.en, {
   'perm.contacts': 'Contacts', 'perm.contacts.d': 'Pick a client from your contacts to copy their phone or email.',
   'perm.clipboard': 'Clipboard', 'perm.clipboard.d': 'Paste video links quickly into the learning library.',
   'perm.testOk': 'Works', 'perm.testFail': 'Could not get access', 'perm.picked': 'Copied: {v}', 'perm.pick': 'Pick contact',
-  'perm.storageInfo': '{u} used of {q}', 'perm.note': 'On Android the app asks the system for these when the APK is built; the contacts picker needs Chrome on Android.'
+  'perm.storageInfo': '{u} used of {q}', 'perm.clipNote': 'Android needs no permission for the clipboard — it works automatically while the app is open.', 'perm.note': 'On Android the app asks the system for these when the APK is built; the contacts picker needs Chrome on Android.'
 });
 Object.assign(MSA.dict.ar, {
   's.perms': 'الأذونات', 'perm.hint': 'اسمح فقط بما تحتاجه. كل شيء يبقى على جهازك ولا يُرفع لأي مكان.',
@@ -28,7 +28,7 @@ Object.assign(MSA.dict.ar, {
   'perm.contacts': 'جهات الاتصال', 'perm.contacts.d': 'اختيار عميل من جهات الاتصال لنسخ رقمه أو إيميله.',
   'perm.clipboard': 'الحافظة', 'perm.clipboard.d': 'لصق روابط الفيديو بسرعة في مكتبة التعليم.',
   'perm.testOk': 'يعمل', 'perm.testFail': 'تعذّر الحصول على الإذن', 'perm.picked': 'تم النسخ: {v}', 'perm.pick': 'اختيار جهة اتصال',
-  'perm.storageInfo': 'مستخدم {u} من {q}', 'perm.note': 'على أندرويد يطلب التطبيق هذه الأذونات من النظام عند بناء الـ APK، واختيار جهات الاتصال يحتاج Chrome على أندرويد.'
+  'perm.storageInfo': 'مستخدم {u} من {q}', 'perm.clipNote': 'أندرويد لا يطلب إذنًا للحافظة — تعمل تلقائيًا أثناء فتح التطبيق.', 'perm.note': 'على أندرويد يطلب التطبيق هذه الأذونات من النظام عند بناء الـ APK، واختيار جهات الاتصال يحتاج Chrome على أندرويد.'
 });
 
 const LIST = [
@@ -37,6 +37,11 @@ const LIST = [
 const stopStream = s => { try { s.getTracks().forEach(x => x.stop()); } catch (e) {} };
 const NAT = n => { try { return MSA.native ? MSA.native(n) : null; } catch (e) { return null; } };
 const isNat = () => !!NAT('App');
+const PL = () => NAT('MsaPerms');
+const ALIAS = { storage: 'files', camera: 'camera', microphone: 'microphone', location: 'location', contacts: 'contacts' };
+const okMem = () => { const S = MSA.state; return (S.permsOk = S.permsOk || {}); };
+const nstate = async id => { const P = PL(); if (!P || !ALIAS[id]) return null; try { const r = await P.permState({ name: ALIAS[id] }); return r.state === 'granted' ? 'granted' : (r.state === 'denied' ? 'denied' : 'prompt'); } catch (e) { return null; } };
+const nask = async id => { const P = PL(); if (!P) return false; const before = await nstate(id); const r = await P.permAsk({ name: ALIAS[id] }); if (r.state === 'granted') return true; if (before === 'denied') { try { await P.openAppSettings(); } catch (e) {} } throw new Error('denied'); };
 /* inside the Android app the WebView's own permissions.query is not reliable, so 'denied' there is only a hint */
 const qn = async name => { const r = await q(name); return isNat() && (r === 'denied' || r === null) ? 'prompt' : r; };
 const q = async name => { try { return (await navigator.permissions.query({ name })).state; } catch (e) { return null; } };
@@ -46,8 +51,8 @@ const media = async (c) => { const s = await navigator.mediaDevices.getUserMedia
 const API = {
   storage: {
     supported: () => !!(navigator.storage && navigator.storage.persist),
-    state: async () => (await navigator.storage.persisted()) ? 'granted' : ((await q('persistent-storage')) === 'denied' ? 'denied' : 'prompt'),
-    request: async () => { await navigator.storage.persist(); }
+    state: async () => (await nstate('storage')) || ((await navigator.storage.persisted()) ? 'granted' : ((await q('persistent-storage')) === 'denied' ? 'denied' : 'prompt')),
+    request: async () => { if (PL()) { await nask('storage'); try { await navigator.storage.persist(); } catch (e) {} return; } await navigator.storage.persist(); }
   },
   notifications: {
     supported: () => 'Notification' in window || !!NAT('LocalNotifications'),
@@ -56,21 +61,28 @@ const API = {
   },
   camera: {
     supported: () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-    state: async () => (await qn('camera')) || 'ask', request: () => media({ video: true })
+    state: async () => (await nstate('camera')) || (await qn('camera')) || 'ask', request: async () => { if (PL()) await nask('camera'); await media({ video: true }); }
   },
   microphone: {
     supported: () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-    state: async () => (await qn('microphone')) || 'ask', request: () => media({ audio: true })
+    state: async () => (await nstate('microphone')) || (await qn('microphone')) || 'ask', request: async () => { if (PL()) await nask('microphone'); await media({ audio: true }); }
   },
   location: {
     supported: () => !!navigator.geolocation,
-    state: async () => (await qn('geolocation')) || 'ask',
-    request: () => new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 15000, maximumAge: 600000 }))
+    state: async () => (await nstate('location')) || (await qn('geolocation')) || 'ask',
+    request: async () => { if (PL()) await nask('location'); return new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 15000, maximumAge: 600000 })); }
   },
   contacts: {
-    supported: () => !!(navigator.contacts && navigator.contacts.select),
-    state: async () => 'ask',
-    request: async () => {
+    supported: () => !!(PL() || (navigator.contacts && navigator.contacts.select)),
+    state: async () => (await nstate('contacts')) || 'ask',
+    request: async (st) => {
+      const P = PL();
+      if (P) {
+        if (st !== 'granted') { await nask('contacts'); return 'asked'; }
+        const r = await P.pickContact(); if (!r || r.cancelled) return;
+        const v = r.phone || r.name || ''; try { await P.copyText({ value: v }); } catch (e) {}
+        MSA.toast(t('perm.picked', { v: (r.name ? r.name + ' · ' : '') + (r.phone || '') })); return;
+      }
       const r = await navigator.contacts.select(['name', 'tel', 'email'], { multiple: false }); if (!r || !r[0]) return;
       const c = r[0], v = (c.tel && c.tel[0]) || (c.email && c.email[0]) || (c.name && c.name[0]) || '';
       try { await navigator.clipboard.writeText(v); } catch (e) {}
@@ -79,8 +91,8 @@ const API = {
   },
   clipboard: {
     supported: () => !!(NAT('Clipboard') || (navigator.clipboard && navigator.clipboard.readText)),
-    state: async () => isNat() ? 'ask' : ((await q('clipboard-read')) || 'ask'),
-    request: async () => { const cp = NAT('Clipboard'); if (cp) { await cp.read(); return; } await navigator.clipboard.readText(); }
+    state: async () => isNat() ? 'granted' : ((await q('clipboard-read')) || 'ask'),
+    request: async () => { await navigator.clipboard.readText(); }
   }
 };
 
@@ -97,11 +109,14 @@ MSA.wirePerms = function(root){
   const paint = async id => {
     const row = $('[data-perm="' + id + '"]', sec); if (!row) return; const a = API[id];
     let st = 'unsupported'; try { if (a.supported()) st = await a.state(); } catch (e) { st = 'ask'; }
+    if ((st === 'ask' || st === 'prompt') && !PL() && okMem()[id]) st = 'granted';   // remembered after a successful request
+    row.dataset.st = st;
     const badge = $('.pbadge', row), btn = $('[data-perm-go]', row), x = $('.perm-x', row);
-    badge.className = 'pbadge ' + st; badge.textContent = t('perm.' + st);
-    x.textContent = ''; btn.hidden = st === 'unsupported' || (st === 'denied' && !isNat()) || (st === 'granted' && id !== 'contacts');
-    btn.textContent = id === 'contacts' ? t('perm.pick') : t('perm.allow');
+    badge.className = 'pbadge ' + st; badge.textContent = (st === 'prompt' || st === 'ask') ? '' : t('perm.' + st); badge.hidden = !badge.textContent;
+    x.textContent = ''; btn.hidden = st === 'unsupported' || (st === 'denied' && !isNat()) || (st === 'granted' && id !== 'contacts') || (id === 'clipboard' && isNat());
+    btn.textContent = (id === 'contacts' && st === 'granted') ? t('perm.pick') : t('perm.allow');
     if (st === 'denied') x.textContent = t('perm.blockedHelp');
+    if (id === 'clipboard' && isNat()) x.textContent = t('perm.clipNote');
     if (id === 'storage' && navigator.storage && navigator.storage.estimate) {
       navigator.storage.estimate().then(e => { if (e.usage != null && e.quota) x.textContent = t('perm.storageInfo', { u: U.size(e.usage), q: U.size(e.quota) }); }).catch(() => {});
     }
@@ -110,7 +125,7 @@ MSA.wirePerms = function(root){
   sec.addEventListener('click', async e => {
     const b = e.target.closest('[data-perm-go]'); if (!b) return; const id = b.closest('[data-perm]').dataset.perm;
     b.disabled = true;
-    try { await API[id].request(); if (id !== 'contacts') MSA.toast(t('perm.testOk'), 'ok'); }
+    try { const st0 = b.closest('[data-perm]').dataset.st; const rr = await API[id].request(st0); okMem()[id] = true; MSA.save(); if (id !== 'contacts' || rr === 'asked') MSA.toast(t('perm.testOk'), 'ok'); }
     catch (err) { if (!(err && err.name === 'AbortError')) { MSA.toast(t('perm.testFail'), 'err'); const xx = $('.perm-x', b.closest('[data-perm]')); if (xx && isNat()) { b.disabled = false; await paint(id); xx.textContent = t('perm.sysHelp') + (err && (err.name || err.message) ? ' (' + (err.name || err.message) + ')' : ''); return; } } }
     b.disabled = false; paint(id);
   });

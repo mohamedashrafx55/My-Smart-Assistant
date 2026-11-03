@@ -272,16 +272,14 @@ R.generic = c => R.colors(c) + R.fonts(c);
 R.foundations = c => R.colors(c) + R.fonts(c) + R.icons(c) + R.imagestyle(c);
 R.onscreen = c => R.static(c) + R.motion(c);
 
-/* ---------- the academic professor tab ---------- */
-function profHTML(p, s){
+/* ---------- success factors of the step (priority order) ---------- */
+function successHTML(p, s){
   const id = MSA.tips && MSA.tips.pick ? MSA.tips.pick(p, s) : 'generic', D = MSA.profData || {}, d = D[id] || D.generic;
-  if (!d) return MSA.empty('note', T('لا يوجد شرح لهذه الخطوة بعد', 'No lesson for this step yet'), '');
-  const cat = MSA.tips && MSA.tips.cats && (MSA.tips.cats[id] || MSA.tips.cats.generic);
-  const card = x => '<div class="pf-card"><div class="pf-t"><b>' + esc(L([x[0], x[1]])) + '</b>' + pinBtn('note', L([x[0], x[1]]) + ': ' + L([x[2], x[3]]), T('أضف إلى ملاحظاتي', 'Add to my notes')) + '</div><p>' + esc(L([x[2], x[3]])) + '</p></div>';
-  return '<div class="pf-intro">' + I('grad', 'sm') + '<div><b>' + esc(T('الأستاذ الأكاديمي', 'Academic professor')) + (cat ? ' — ' + esc(L(cat.h)) : '') + '</b><p>' + esc(L(d.intro)) + '</p></div></div>' +
-    sec(T('عناصر النجاح وشرحها', 'Success factors, explained'), '<div class="pf-list">' + d.secs.map(card).join('') + '</div>', 'star') +
-    (d.acad && d.acad.length ? sec(T('الجانب الأكاديمي: نظريات ومبادئ', 'The academic side: theories & principles'), '<div class="pf-list ac">' + d.acad.map(card).join('') + '</div>', 'note') : '') +
-    (d.mist && d.mist.length ? sec(T('أخطاء شائعة تتجنبها', 'Common mistakes to avoid'), '<ul class="pf-mist">' + d.mist.map(x => '<li>' + esc(L(x)) + '</li>').join('') + '</ul>', 'info') : '');
+  if (!d || !d.secs || !d.secs.length) return '';
+  const ar = lg() === 0;
+  const item = (x, i) => { const title = ar ? x[0] + (x[1] ? ' (' + x[1] + ')' : '') : x[1], desc = ar ? x[2] : (x[3] || x[2]);
+    return '<li class="sf-item"><span class="sf-n">' + (i + 1) + '</span><div class="sf-b"><div class="sf-t"><b>' + esc(title) + '</b>' + pinBtn('note', title + ': ' + desc, T('أضف إلى ملاحظاتي', 'Add to my notes')) + '</div><p>' + esc(desc) + '</p></div></li>'; };
+  return sec(T('عناصر نجاح هذه المرحلة (بترتيب الأولوية)', 'Success factors of this step (by priority)'), '<ol class="sf-list">' + d.secs.map(item).join('') + '</ol>', 'star');
 }
 
 /* ---------- modal ---------- */
@@ -312,12 +310,13 @@ function draw(root){
     (cur.busy ? '<div class="sg-busy">' + I('sparkles', 'sm') + esc(cur.busy) + '</div>' : '') + '</div>';
   const fn = R[s.key] || R.generic;
   const stepNote = '<div class="sg-for">' + esc(T('اقتراحات لخطوة: ', 'Suggestions for: ')) + '<b>' + esc(P.title(s)) + '</b></div>';
-  const tab = cur.tab === 'prof' ? 'prof' : 'sug';
-  const tabs = '<div class="sg-tabs" role="tablist"><button class="sg-tab' + (tab === 'sug' ? ' on' : '') + '" data-sg="tab" data-tab="sug" role="tab">' + I('sparkles', 'sm') + esc(T('الاقتراحات', 'Suggestions')) + '</button><button class="sg-tab' + (tab === 'prof' ? ' on' : '') + '" data-sg="tab" data-tab="prof" role="tab">' + I('grad', 'sm') + esc(T('الأستاذ الأكاديمي', 'Academic professor')) + '</button></div>';
-  if (tab === 'prof') {
-    const sel = '<div class="sg-top"><select id="sgStep" aria-label="step">' + keys.map(x => '<option value="' + x.id + '"' + (x.id === s.id ? ' selected' : '') + '>' + esc(P.title(x)) + '</option>').join('') + '</select></div>';
-    root.innerHTML = tabs + '<div class="sg-head">' + sel + '</div>' + stepNote.replace(T('اقتراحات لخطوة: ', 'Suggestions for: '), T('شرح لخطوة: ', 'Lesson for: ')) + '<div class="sg-body">' + profHTML(p, s) + '</div>';
-  } else root.innerHTML = tabs + head + stepNote + '<div class="sg-body">' + fn(c) + '</div>';
+  const tab = cur.tab === 'theory' ? 'theory' : 'sug';
+  const tabs = '<div class="sg-tabs" role="tablist"><button class="sg-tab' + (tab === 'sug' ? ' on' : '') + '" data-sg="tab" data-tab="sug" role="tab">' + I('sparkles', 'sm') + esc(T('الاقتراحات', 'Suggestions')) + '</button><button class="sg-tab' + (tab === 'theory' ? ' on' : '') + '" data-sg="tab" data-tab="theory" role="tab">' + I('palette', 'sm') + esc(T('نظرية الألوان', 'Colour theory')) + '</button></div>';
+  if (tab === 'theory' && MSA.colorTheoryHTML) {
+    root.innerHTML = tabs + '<div class="sg-body">' + MSA.colorTheoryHTML(p) + '</div>';
+    MSA.wireColorTheory(root, p, (type, v, quiet) => pin(p, type, v, quiet)); return;
+  }
+  root.innerHTML = tabs + head + stepNote + '<div class="sg-body">' + successHTML(p, s) + fn(c) + '</div>';
   MSA.hydrateAtts(root); fillIcons(root, c);
 }
 function bindRoot(root){
