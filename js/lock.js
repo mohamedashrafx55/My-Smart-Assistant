@@ -132,7 +132,7 @@ function lock(){
   const bio = $('#lkBio', el);
   const tryBio = async () => { if (authing) return; try { if (await bioVerify()) unlock(); } catch (e) { /* cancelled or failed: the password still works */ } };
   if (bio) bio.onclick = tryBio;
-  if (bio && BIO()) setTimeout(tryBio, 450);   // native prompt right away; browsers need a tap
+  // the fingerprint prompt only appears when the button is tapped, so the logo animation stays visible
   $('#lkForgot', el).onclick = async () => {
     if (!await MSA.confirm(t('lk.forgotQ'), { danger: true, okLabel: t('resetAll') })) return;
     await MSA.resetAll(); location.reload();
