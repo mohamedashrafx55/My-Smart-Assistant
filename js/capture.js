@@ -5,12 +5,14 @@ const t = (k, v) => MSA.t(k, v);
 Object.assign(MSA.dict.en, {
   'cap.files': 'Choose from device', 'cap.photo': 'Take a photo', 'cap.video': 'Record a video', 'cap.voice': 'Record voice',
   'cap.shutter': 'Capture', 'cap.rec': 'Start recording', 'cap.stop': 'Stop', 'cap.retake': 'Retake', 'cap.use': 'Use it', 'cap.switch': 'Switch camera',
-  'cap.denied': 'Camera / microphone access was not allowed. Allow it from Settings → Permissions.', 'cap.title.image': 'Add image', 'cap.title.video': 'Add video', 'cap.title.audio': 'Add audio'
+  'cap.denied': 'Camera / microphone access was not allowed. Allow it from Settings → Permissions.', 'cap.title.image': 'Add image', 'cap.title.video': 'Add video', 'cap.title.audio': 'Add audio',
+  'cap.link': 'Video link', 'cap.linkAsk': 'Paste the video link (YouTube, Vimeo, Drive…)', 'cap.linkBad': 'That is not a valid link', 'cap.linkNoCover': 'No automatic cover for this link — open it and choose a cover yourself.', 'cap.linkOpen': 'Open link', 'cap.linkCopy': 'Copy link', 'cap.linkCopied': 'Link copied', 'cap.linkCover': 'Choose cover', 'cap.linkAdded': 'Link added'
 });
 Object.assign(MSA.dict.ar, {
   'cap.files': 'اختيار من الجهاز', 'cap.photo': 'التقاط صورة', 'cap.video': 'تسجيل فيديو', 'cap.voice': 'تسجيل صوت',
   'cap.shutter': 'التقاط', 'cap.rec': 'ابدأ التسجيل', 'cap.stop': 'إيقاف', 'cap.retake': 'إعادة', 'cap.use': 'استخدمها', 'cap.switch': 'تبديل الكاميرا',
-  'cap.denied': 'لم يتم السماح بالوصول للكاميرا / الميكروفون. فعّله من الإعدادات ← الأذونات.', 'cap.title.image': 'إضافة صورة', 'cap.title.video': 'إضافة فيديو', 'cap.title.audio': 'إضافة صوت'
+  'cap.denied': 'لم يتم السماح بالوصول للكاميرا / الميكروفون. فعّله من الإعدادات ← الأذونات.', 'cap.title.image': 'إضافة صورة', 'cap.title.video': 'إضافة فيديو', 'cap.title.audio': 'إضافة صوت',
+  'cap.link': 'رابط فيديو', 'cap.linkAsk': 'الصق رابط الفيديو (يوتيوب، فيميو، درايف…)', 'cap.linkBad': 'ده مش رابط صحيح', 'cap.linkNoCover': 'مفيش غلاف تلقائي للرابط ده — افتحه واختار غلاف بنفسك.', 'cap.linkOpen': 'فتح الرابط', 'cap.linkCopy': 'نسخ الرابط', 'cap.linkCopied': 'تم نسخ الرابط', 'cap.linkCover': 'اختيار غلاف', 'cap.linkAdded': 'تمت إضافة الرابط'
 });
 const orig = MSA.addFiles;
 const stamp = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()); };
@@ -71,18 +73,52 @@ function capture(kind){
   });
 }
 
+/* a video added as a link: the cover comes from the site (YouTube directly, others through noembed) and can be replaced by the user */
+const normUrl = s => { s = String(s || '').trim(); if (/^(www\.|youtu)/i.test(s)) s = 'https://' + s; try { const u = new URL(s); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch (e) { return ''; } };
+const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return u; } };
+async function linkMeta(a){
+  const ctl = typeof AbortController === 'function' ? new AbortController() : null, to = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 5000);
+  try {
+    const r = await fetch('https://noembed.com/embed?url=' + encodeURIComponent(a.url), ctl ? { signal: ctl.signal } : {});
+    if (r.ok) { const j = await r.json(); if (j && j.title) a.name = String(j.title).slice(0, 120); if (j && j.thumbnail_url && !a.thumb) a.thumb = j.thumbnail_url; }
+  } catch (e) {} finally { clearTimeout(to); }
+}
+async function addLinks(){
+  const v = await MSA.ask({ title: t('cap.link'), label: t('cap.linkAsk'), placeholder: 'https://…', multiline: true });
+  if (!v) return [];
+  const raw = String(v).split(/[\s,]+/).filter(Boolean), urls = raw.map(normUrl).filter(Boolean);
+  if (!urls.length) { MSA.toast(t('cap.linkBad'), 'err'); return []; }
+  const out = [];
+  for (const url of urls) {
+    const vid = MSA.ytId ? MSA.ytId(url) : null;
+    const a = { id: U.uid('l'), name: vid ? 'YouTube' : hostOf(url), mime: '', size: 0, kind: 'link', url, vid: vid || null, thumb: vid ? 'https://i.ytimg.com/vi/' + vid + '/hqdefault.jpg' : '' };
+    await linkMeta(a); out.push(a);
+  }
+  MSA.toast(t('cap.linkAdded'));
+  if (out.some(a => !a.thumb)) setTimeout(() => MSA.toast(t('cap.linkNoCover')), 1400);
+  return out;
+}
+/* deleting a link also deletes the cover picture the user chose for it */
+const delFile = MSA.files.del;
+MSA.files.del = async function(id){
+  if (typeof id === 'string' && id.charAt(0) === 'l' && !/_cv$/.test(id)) { try { if (await MSA.files.get(id + '_cv')) await MSA.files.del(id + '_cv'); } catch (e) {} }
+  return delFile.call(MSA.files, id);
+};
+
 MSA.addFiles = async function(kind){
   if (kind === 'doc') return orig(kind);
   const src = await new Promise(res => {
     const lab = { image: ['camera', 'cap.photo'], video: ['video', 'cap.video'], audio: ['mic', 'cap.voice'] }[kind];
     const m = MSA.modal({ title: t('cap.title.' + kind), footer: false, size: 'sm',
       body: '<div class="capchoice"><button class="btn lg" data-s="files">' + I('folder-open') + '<span>' + U.esc(t('cap.files')) + '</span></button>' +
-        (canCapture() ? '<button class="btn lg primary" data-s="cam">' + I(lab[0]) + '<span>' + U.esc(t(lab[1])) + '</span></button>' : '') + '</div>',
+        (canCapture() ? '<button class="btn lg primary" data-s="cam">' + I(lab[0]) + '<span>' + U.esc(t(lab[1])) + '</span></button>' : '') +
+        (kind === 'video' ? '<button class="btn lg" data-s="link">' + I('link') + '<span>' + U.esc(t('cap.link')) + '</span></button>' : '') + '</div>',
       onMount: el => { el.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { res(b.dataset.s); m.close(); }); } });
     const w = setInterval(() => { if (!document.body.contains(m.el)) { clearInterval(w); res(null); } }, 300);
   });
   if (!src) return [];
   if (src === 'files') return orig(kind);
+  if (src === 'link') return addLinks();
   const files = await capture(kind), out = [];
   for (const f of files) {
     try { const a = await MSA.files.put(f); a.kind = kind; out.push(a); } catch (e) { MSA.toast(t('fileFail') + ': ' + f.name, 'err'); }

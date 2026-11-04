@@ -193,13 +193,19 @@ MSA.addFiles = async function(kind){
   return out;
 };
 const KIND_ICON = { image: 'image', video: 'video', audio: 'music', doc: 'doc' };
+MSA.linkCover = function(a){
+  if (a.cover) return '<img data-thumb="' + a.id + '_cv" alt="">';
+  if (a.thumb) return '<img src="' + U.esc(a.thumb) + '" referrerpolicy="no-referrer" loading="lazy" alt="" onerror="this.remove()">';
+  return '';
+};
 MSA.attHTML = function(a, removable){
   const ext = (a.name.split('.').pop() || '').slice(0, 5).toUpperCase();
   let inner;
-  if (a.kind === 'image') inner = '<img data-thumb="' + a.id + '" alt="">';
+  if (a.kind === 'link') inner = '<div class="kind">' + I('video') + '<span>' + U.esc((a.name || '').slice(0, 18)) + '</span></div>' + MSA.linkCover(a) + '<span class="tag">' + I('play') + '</span>';
+  else if (a.kind === 'image') inner = '<img data-thumb="' + a.id + '" alt="">';
   else if (a.kind === 'video') inner = '<video data-thumb="' + a.id + '" muted preload="metadata" playsinline></video><span class="tag">' + I('play') + '</span>';
   else inner = '<div class="kind">' + I(KIND_ICON[a.kind] || 'doc') + '<span>' + U.esc(a.kind === 'doc' ? ext : a.name.slice(0, 18)) + '</span></div>';
-  return '<div class="att" data-att="' + a.id + '" title="' + U.esc(a.name) + '">' + inner +
+  return '<div class="att' + (a.kind === 'link' ? ' lnk' : '') + '" data-att="' + a.id + '" title="' + U.esc(a.name) + '">' + inner +
     (removable ? '<button class="x" data-rm-att="' + a.id + '" aria-label="' + U.esc(t('delete')) + '">' + I('x', 'sm') + '</button>' : '') + '</div>';
 };
 MSA.hydrateAtts = function(root){
@@ -213,6 +219,25 @@ MSA.downloadAtt = async function(a){
   const u = await MSA.files.url(a.id); if (!u) return;
   const l = document.createElement('a'); l.href = u; l.download = a.name; document.body.appendChild(l); l.click(); l.remove();
 };
+function linkView(cur, box){
+  const draw = () => {
+    box.innerHTML = '<div class="lkv"><div class="lkv-c">' + MSA.linkCover(cur) + '<button class="lkv-play" id="lkGo" aria-label="' + U.esc(t('cap.linkOpen')) + '">' + I('play') + '</button></div>' +
+      '<div class="lkv-n" dir="auto">' + U.esc(cur.name || '') + '</div><div class="hint" dir="ltr">' + U.esc(cur.url) + '</div>' +
+      '<div class="row" style="justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn primary" id="lkOpen">' + I('link', 'sm') + U.esc(t('cap.linkOpen')) + '</button>' +
+      '<button class="btn" id="lkCopy">' + I('copy', 'sm') + U.esc(t('cap.linkCopy')) + '</button><button class="btn" id="lkCov">' + I('image', 'sm') + U.esc(t('cap.linkCover')) + '</button></div></div>';
+    MSA.hydrateAtts(box);
+    const open = () => MSA.openLink(cur.url);
+    $('#lkGo', box).onclick = open; $('#lkOpen', box).onclick = open;
+    $('#lkCopy', box).onclick = async () => { try { await navigator.clipboard.writeText(cur.url); MSA.toast(t('cap.linkCopied'), 'ok'); } catch (e) { MSA.toast(cur.url); } };
+    $('#lkCov', box).onclick = async () => {
+      const fs = await MSA.pickFiles('image/*', false); const f = fs && fs[0]; if (!f) return;
+      await MSA.files.putRec({ id: cur.id + '_cv', name: 'cover', mime: f.type || 'image/jpeg', size: f.size || 0, blob: f, created: Date.now() });
+      cur.cover = true; MSA.save(); draw();
+      document.querySelectorAll('.att[data-att="' + cur.id + '"]').forEach(w => { w.querySelectorAll('img').forEach(x => x.remove()); w.insertAdjacentHTML('afterbegin', MSA.linkCover(cur)); MSA.hydrateAtts(w); });
+    };
+  };
+  draw();
+}
 MSA.openAtt = async function(a, list){
   list = list && list.length ? list : [a];
   let idx = Math.max(0, list.findIndex(x => x.id === a.id));
@@ -220,6 +245,7 @@ MSA.openAtt = async function(a, list){
   const show = async () => {
     const cur = list[idx]; $('h3', m.el).textContent = cur.name;
     const box = $('#vwr', m.el); box.innerHTML = '';
+    if (cur.kind === 'link') { linkView(cur, box); return; }
     const u = await MSA.files.url(cur.id);
     if (!u) { box.innerHTML = '<p class="muted">' + U.esc(t('fileMissing')) + '</p>'; return; }
     if (cur.kind === 'image') box.innerHTML = '<img src="' + u + '" alt="">';

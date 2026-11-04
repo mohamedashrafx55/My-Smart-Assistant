@@ -185,13 +185,15 @@ function edgesSVG(L){
 function thumbOf(s){
   const atts = P.allAtts([s]); const kinds = {};
   atts.forEach(a => kinds[a.kind] = (kinds[a.kind] || 0) + 1);
-  const img = [...atts].reverse().find(a => a.kind === 'image'), vid = [...atts].reverse().find(a => a.kind === 'video');
+  /* the cover is the most recently added picture, video or video link */
+  const last = [...atts].reverse().find(a => a.kind === 'image' || a.kind === 'video' || (a.kind === 'link' && (a.cover || a.thumb)));
   let inner;
-  if (img) inner = '<img data-thumb="' + img.id + '" alt="">';
-  else if (vid) inner = '<video data-thumb="' + vid.id + '" muted preload="metadata" playsinline></video>';
+  if (last && last.kind === 'image') inner = '<img data-thumb="' + last.id + '" alt="">';
+  else if (last && last.kind === 'video') inner = '<video data-thumb="' + last.id + '" muted preload="metadata" playsinline></video>';
+  else if (last) inner = MSA.linkCover(last) + '<span class="mn-play">' + I('play', 'sm') + '</span>';
   else inner = '<div class="mn-empty">' + I(atts.length ? 'clip' : 'plus', 'sm') + '</div>';
-  const chips = [['image', 'image'], ['video', 'video'], ['audio', 'music'], ['doc', 'doc']].filter(k => kinds[k[0]]).map(k => '<span>' + I(k[1], 'xs') + kinds[k[0]] + '</span>').join('');
-  return '<div class="mn-thumb' + (img || vid ? ' has' : '') + '">' + inner + (chips ? '<div class="mn-chips">' + chips + '</div>' : '') + '</div>';
+  const chips = [['image', 'image'], ['video', 'video'], ['link', 'link'], ['audio', 'music'], ['doc', 'doc']].filter(k => kinds[k[0]]).map(k => '<span>' + I(k[1], 'xs') + kinds[k[0]] + '</span>').join('');
+  return '<div class="mn-thumb' + (last ? ' has' : '') + '">' + inner + (chips ? '<div class="mn-chips">' + chips + '</div>' : '') + '</div>';
 }
 const PORTS = '<i class="hd t" data-port></i><i class="hd b" data-port></i><i class="hd l" data-port></i><i class="hd r" data-port></i>';
 

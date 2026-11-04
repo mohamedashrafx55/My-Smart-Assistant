@@ -421,7 +421,7 @@ jobs:
           PY
           grep -n "msaupdate\|REQUEST_INSTALL" android/app/src/main/AndroidManifest.xml
 
-      - name: Notification sounds (5 tones into res/raw)
+      - name: Notification sounds (8 tones into res/raw)
         working-directory: build
         run: |
           python3 - <<'PY'

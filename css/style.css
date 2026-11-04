@@ -1177,3 +1177,12 @@ html.bd-open body{overflow:hidden}
 .ct-course details{border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--panel2);padding:8px 12px;margin-bottom:8px}
 .ct-course summary{cursor:pointer;font-weight:600;font-size:14px}
 .ct-course p{margin:8px 0 2px;font-size:13.5px;line-height:1.9}
+
+.att.lnk img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.mn-thumb .mn-play{position:absolute;inset-inline-start:5px;bottom:5px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;display:grid;place-items:center;pointer-events:none}
+.lkv{text-align:center;width:100%}
+.lkv-c{position:relative;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:var(--bg2);border:1px solid var(--line)}
+.lkv-c img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.lkv-play{position:absolute;inset:0;margin:auto;width:56px;height:56px;border-radius:50%;border:0;background:rgba(0,0,0,.62);color:#fff;display:grid;place-items:center;cursor:pointer}
+.lkv-play svg{width:24px;height:24px}
+.lkv-n{margin-top:10px;font-weight:700}
