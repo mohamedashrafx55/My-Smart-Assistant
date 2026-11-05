@@ -5,19 +5,19 @@ const t = (k, v) => MSA.t(k, v);
 Object.assign(MSA.dict.en, {
   'home.hi': 'Hello, {n}', 'home.sub': 'Pick a section to start working', 'home.back': 'Home',
   'home.t.active': 'Follow your campaign plan step by step', 'home.t.done': 'Your finished work, ready to present',
-  'home.t.learn': 'Videos and courses organised in folders', 'home.t.tasks': 'Tasks, deadlines and notes',
-  'home.c.active': '{n} in progress', 'home.c.done': '{n} completed', 'home.c.learn': '{n} videos', 'home.c.tasks': '{n} open'
+  'home.t.learn': 'Videos and courses organised in folders', 'home.t.tasks': 'Tasks, deadlines and notes', 'home.t.media': 'Music that keeps playing and an in-app video player', 'home.t.reports': 'Statistics, charts and your finished work',
+  'home.c.active': '{n} in progress', 'home.c.done': '{n} completed', 'home.c.learn': '{n} videos', 'home.c.tasks': '{n} open', 'home.c.media': '{n} tracks', 'home.c.reports': '{n} finished'
 });
 Object.assign(MSA.dict.ar, {
   'home.hi': 'أهلاً يا {n}', 'home.sub': 'اختر القسم اللي هتشتغل فيه', 'home.back': 'الرئيسية',
   'home.t.active': 'امشِ على خطة الكامبين خطوة بخطوة', 'home.t.done': 'شغلك المنتهي جاهز للعرض',
-  'home.t.learn': 'فيديوهات وكورسات مرتبة في مجلدات', 'home.t.tasks': 'مهام ومواعيد وملاحظات',
-  'home.c.active': '{n} قيد التنفيذ', 'home.c.done': '{n} مكتمل', 'home.c.learn': '{n} فيديو', 'home.c.tasks': '{n} مفتوحة'
+  'home.t.learn': 'فيديوهات وكورسات مرتبة في مجلدات', 'home.t.tasks': 'مهام ومواعيد وملاحظات', 'home.t.media': 'موسيقى تفضل شغالة ومشغّل فيديو جوه التطبيق', 'home.t.reports': 'إحصائيات ورسوم بيانية وشغلك المنتهي',
+  'home.c.active': '{n} قيد التنفيذ', 'home.c.done': '{n} مكتمل', 'home.c.learn': '{n} فيديو', 'home.c.tasks': '{n} مفتوحة', 'home.c.media': '{n} أغنية', 'home.c.reports': '{n} منتهي'
 });
-const TILES = [['active', '#5b8def'], ['done', '#f0b43c'], ['learn', '#9b6bff'], ['tasks', '#3ccf91']];
+const TILES = [['active', '#5b8def'], ['done', '#f0b43c'], ['learn', '#9b6bff'], ['tasks', '#3ccf91'], ['media', '#ff6b9a'], ['reports', '#18b4c8']];
 function counts(){
   const s = MSA.state, P = MSA.proj;
-  return { active: P.activeList().length, done: P.doneList().length, learn: s.learning.videos.length, tasks: s.tasks.filter(x => x.type === 'task' && x.status !== 'done').length };
+  return { active: P.activeList().length, done: P.doneList().length, learn: s.learning.videos.length, tasks: s.tasks.filter(x => x.type === 'task' && x.status !== 'done').length, media: ((s.media && s.media.tracks) || []).length, reports: P.doneList().length };
 }
 function render(host){
   const c = counts(), first = MSA.myName();

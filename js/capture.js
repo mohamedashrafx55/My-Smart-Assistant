@@ -76,11 +76,12 @@ function capture(kind){
 /* a video added as a link: the cover comes from the site (YouTube directly, others through noembed) and can be replaced by the user */
 const normUrl = s => { s = String(s || '').trim(); if (/^(www\.|youtu)/i.test(s)) s = 'https://' + s; try { const u = new URL(s); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch (e) { return ''; } };
 const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return u; } };
-async function linkMeta(a){
+async function linkMeta(a, f){
+  f = f || 'name';
   const ctl = typeof AbortController === 'function' ? new AbortController() : null, to = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 5000);
   try {
     const r = await fetch('https://noembed.com/embed?url=' + encodeURIComponent(a.url), ctl ? { signal: ctl.signal } : {});
-    if (r.ok) { const j = await r.json(); if (j && j.title) a.name = String(j.title).slice(0, 120); if (j && j.thumbnail_url && !a.thumb) a.thumb = j.thumbnail_url; }
+    if (r.ok) { const j = await r.json(); if (j && j.title) a[f] = String(j.title).slice(0, 120); if (j && j.thumbnail_url && !a.thumb) a.thumb = j.thumbnail_url; }
   } catch (e) {} finally { clearTimeout(to); }
 }
 async function addLinks(){
@@ -98,6 +99,7 @@ async function addLinks(){
   if (out.some(a => !a.thumb)) setTimeout(() => MSA.toast(t('cap.linkNoCover')), 1400);
   return out;
 }
+MSA.linkUtil = { normUrl, hostOf, meta: linkMeta };
 /* deleting a link also deletes the cover picture the user chose for it */
 const delFile = MSA.files.del;
 MSA.files.del = async function(id){

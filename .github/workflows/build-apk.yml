@@ -51,7 +51,7 @@ jobs:
           p='android/app/src/main/AndroidManifest.xml'
           s=open(p,encoding='utf-8').read()
           add=''
-          for perm in ['POST_NOTIFICATIONS','SCHEDULE_EXACT_ALARM','RECEIVE_BOOT_COMPLETED','USE_BIOMETRIC','VIBRATE','REQUEST_INSTALL_PACKAGES','CAMERA','RECORD_AUDIO','MODIFY_AUDIO_SETTINGS','ACCESS_FINE_LOCATION','ACCESS_COARSE_LOCATION','READ_CONTACTS','READ_MEDIA_IMAGES','READ_MEDIA_VIDEO','READ_MEDIA_AUDIO','READ_EXTERNAL_STORAGE']:
+          for perm in ['POST_NOTIFICATIONS','SCHEDULE_EXACT_ALARM','RECEIVE_BOOT_COMPLETED','USE_BIOMETRIC','VIBRATE','REQUEST_INSTALL_PACKAGES','CAMERA','RECORD_AUDIO','MODIFY_AUDIO_SETTINGS','ACCESS_FINE_LOCATION','ACCESS_COARSE_LOCATION','READ_CONTACTS','READ_MEDIA_IMAGES','READ_MEDIA_VIDEO','READ_MEDIA_AUDIO','READ_EXTERNAL_STORAGE','FOREGROUND_SERVICE','FOREGROUND_SERVICE_MEDIA_PLAYBACK','WAKE_LOCK']:
               if 'android.permission.'+perm not in s:
                   add+='    <uses-permission android:name="android.permission.%s"/>\n'%perm
           for feat in ['camera','camera.autofocus','microphone','location']:
@@ -123,7 +123,33 @@ jobs:
               public void onCreate(Bundle savedInstanceState) {
                   registerPlugin(ApkInstaller.class);
                   registerPlugin(MsaPerms.class);
+                  registerPlugin(MsaMedia.class);
                   super.onCreate(savedInstanceState);
+                  try {
+                      getBridge().getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
+                  } catch (Exception e) { }
+              }
+
+              /* keep the page (and its audio) running with the screen off while music is playing */
+              private void keepAlive() {
+                  try {
+                      if (MsaMedia.active && getBridge() != null && getBridge().getWebView() != null) {
+                          getBridge().getWebView().onResume();
+                          getBridge().getWebView().resumeTimers();
+                      }
+                  } catch (Exception e) { }
+              }
+
+              @Override
+              public void onPause() {
+                  super.onPause();
+                  keepAlive();
+              }
+
+              @Override
+              public void onStop() {
+                  super.onStop();
+                  keepAlive();
               }
           }
           JAVA
@@ -410,6 +436,244 @@ jobs:
               }
           }
           JAVA
+          cat > $d/MsaMedia.java <<'JAVA'
+          package com.mysmartassistant.app;
+
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.util.Base64;
+          import androidx.core.content.FileProvider;
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+          import java.io.File;
+          import java.io.FileOutputStream;
+
+          @CapacitorPlugin(name = "MsaMedia")
+          public class MsaMedia extends Plugin {
+              public static volatile boolean active = false;
+              public static volatile boolean playing = false;
+              public static volatile String title = "";
+              private static MsaMedia instance;
+
+              @Override
+              public void load() {
+                  instance = this;
+              }
+
+              public static void emit(String action) {
+                  MsaMedia p = instance;
+                  if (p == null) return;
+                  JSObject o = new JSObject();
+                  o.put("a", action);
+                  p.notifyListeners("action", o);
+              }
+
+              private File stageFile(String name) throws Exception {
+                  File dir = new File(new File(getContext().getCacheDir(), "updates"), "ext");
+                  dir.mkdirs();
+                  String n = name == null ? "video" : name.replaceAll("[^A-Za-z0-9._-]", "_");
+                  if (n.length() == 0) n = "video";
+                  File f = new File(dir, n);
+                  if (!f.getCanonicalPath().startsWith(dir.getCanonicalPath() + File.separator)) throw new Exception("bad name");
+                  return f;
+              }
+
+              @PluginMethod
+              public void stageChunk(PluginCall call) {
+                  try {
+                      File f = stageFile(call.getString("name"));
+                      boolean first = Boolean.TRUE.equals(call.getBoolean("first", false));
+                      if (first) {
+                          File[] old = f.getParentFile().listFiles();
+                          if (old != null) for (File o : old) o.delete();
+                      }
+                      byte[] b = Base64.decode(call.getString("data", ""), Base64.DEFAULT);
+                      FileOutputStream os = new FileOutputStream(f, !first);
+                      try {
+                          os.write(b);
+                      } finally {
+                          os.close();
+                      }
+                      call.resolve();
+                  } catch (Exception e) {
+                      call.reject(String.valueOf(e.getMessage()));
+                  }
+              }
+
+              @PluginMethod
+              public void openExternal(PluginCall call) {
+                  try {
+                      File f = stageFile(call.getString("name"));
+                      if (!f.exists()) {
+                          call.reject("missing");
+                          return;
+                      }
+                      String mime = call.getString("mime", "video/*");
+                      Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".msaupdate", f);
+                      Intent i = new Intent(Intent.ACTION_VIEW);
+                      i.setDataAndType(uri, mime);
+                      i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                      Intent c = Intent.createChooser(i, "");
+                      c.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                      getContext().startActivity(c);
+                      call.resolve();
+                  } catch (Exception e) {
+                      call.reject(String.valueOf(e.getMessage()));
+                  }
+              }
+
+              @PluginMethod
+              public void sync(PluginCall call) {
+                  try {
+                      boolean a = Boolean.TRUE.equals(call.getBoolean("active", false));
+                      playing = Boolean.TRUE.equals(call.getBoolean("playing", false));
+                      title = call.getString("title", "");
+                      Intent i = new Intent(getContext(), MediaService.class);
+                      if (a) {
+                          if (MediaService.inst != null) {
+                              MediaService.refresh(getContext());
+                          } else {
+                              active = true;
+                              i.setAction("msa.media.start");
+                              if (Build.VERSION.SDK_INT >= 26) getContext().startForegroundService(i);
+                              else getContext().startService(i);
+                          }
+                      } else {
+                          active = false;
+                          getContext().stopService(i);
+                      }
+                      call.resolve();
+                  } catch (Exception e) {
+                      call.reject(String.valueOf(e.getMessage()));
+                  }
+              }
+          }
+          JAVA
+          cat > $d/MediaService.java <<'JAVA'
+          package com.mysmartassistant.app;
+
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.app.Service;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.pm.ServiceInfo;
+          import android.os.Build;
+          import android.os.IBinder;
+          import android.os.PowerManager;
+          import androidx.core.app.NotificationCompat;
+
+          public class MediaService extends Service {
+              private static final String CH = "msa_media";
+              private static final int ID = 7731;
+              public static volatile MediaService inst;
+              private PowerManager.WakeLock wl;
+
+              static void refresh(Context ctx) {
+                  try {
+                      NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                      nm.notify(ID, build(ctx));
+                      MediaService s = inst;
+                      if (s != null) s.applyWake();
+                  } catch (Exception e) { }
+              }
+
+              private void applyWake() {
+                  if (wl == null) {
+                      PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                      if (pm != null) {
+                          wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "msa:media");
+                          wl.setReferenceCounted(false);
+                      }
+                  }
+                  if (wl != null && MsaMedia.playing && !wl.isHeld()) wl.acquire(6 * 60 * 60 * 1000L);
+                  if (wl != null && !MsaMedia.playing && wl.isHeld()) wl.release();
+              }
+
+              private static PendingIntent act(Context ctx, String a, int code) {
+                  Intent i = new Intent(ctx, MediaActionReceiver.class);
+                  i.setAction("msa.media." + a);
+                  i.setPackage(ctx.getPackageName());
+                  int fl = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0);
+                  return PendingIntent.getBroadcast(ctx, code, i, fl);
+              }
+
+              static Notification build(Context ctx) {
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm.getNotificationChannel(CH) == null) {
+                          NotificationChannel c = new NotificationChannel(CH, "Music player", NotificationManager.IMPORTANCE_LOW);
+                          c.setShowBadge(false);
+                          nm.createNotificationChannel(c);
+                      }
+                  }
+                  Intent open = ctx.getPackageManager().getLaunchIntentForPackage(ctx.getPackageName());
+                  int fl = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0);
+                  PendingIntent content = open == null ? null : PendingIntent.getActivity(ctx, 0, open, fl);
+                  NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, CH)
+                      .setSmallIcon(android.R.drawable.ic_media_play)
+                      .setContentTitle(MsaMedia.title == null || MsaMedia.title.length() == 0 ? "My Smart Assistant" : MsaMedia.title)
+                      .setContentText("My Smart Assistant")
+                      .setOngoing(MsaMedia.playing)
+                      .setOnlyAlertOnce(true)
+                      .setShowWhen(false)
+                      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                      .setContentIntent(content)
+                      .addAction(android.R.drawable.ic_media_previous, "Previous", act(ctx, "prev", 1))
+                      .addAction(MsaMedia.playing ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play, MsaMedia.playing ? "Pause" : "Play", act(ctx, MsaMedia.playing ? "pause" : "play", 2))
+                      .addAction(android.R.drawable.ic_media_next, "Next", act(ctx, "next", 3))
+                      .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", act(ctx, "stop", 4));
+                  return b.build();
+              }
+
+              @Override
+              public int onStartCommand(Intent intent, int flags, int startId) {
+                  inst = this;
+                  Notification n = build(this);
+                  if (Build.VERSION.SDK_INT >= 29) startForeground(ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+                  else startForeground(ID, n);
+                  applyWake();
+                  return START_NOT_STICKY;
+              }
+
+              @Override
+              public void onDestroy() {
+                  try {
+                      if (wl != null && wl.isHeld()) wl.release();
+                  } catch (Exception e) { }
+                  MsaMedia.active = false;
+                  inst = null;
+                  super.onDestroy();
+              }
+
+              @Override
+              public IBinder onBind(Intent intent) {
+                  return null;
+              }
+          }
+          JAVA
+          cat > $d/MediaActionReceiver.java <<'JAVA'
+          package com.mysmartassistant.app;
+
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+
+          public class MediaActionReceiver extends BroadcastReceiver {
+              @Override
+              public void onReceive(Context context, Intent intent) {
+                  String a = intent == null ? null : intent.getAction();
+                  if (a == null || !a.startsWith("msa.media.")) return;
+                  MsaMedia.emit(a.substring("msa.media.".length()));
+              }
+          }
+          JAVA
           python3 - <<'PY'
           p='android/app/src/main/AndroidManifest.xml'
           s=open(p,encoding='utf-8').read()
@@ -417,9 +681,12 @@ jobs:
           if 'msaupdate' not in s:
               assert '</application>' in s
               s=s.replace('</application>',prov+'</application>',1)
+          svc='    <service android:name="com.mysmartassistant.app.MediaService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>\n    <receiver android:name="com.mysmartassistant.app.MediaActionReceiver" android:exported="false"/>\n'
+          if 'MediaService' not in s:
+              s=s.replace('</application>',svc+'</application>',1)
           open(p,'w',encoding='utf-8').write(s)
           PY
-          grep -n "msaupdate\|REQUEST_INSTALL" android/app/src/main/AndroidManifest.xml
+          grep -n "msaupdate\|REQUEST_INSTALL\|MediaService\|FOREGROUND" android/app/src/main/AndroidManifest.xml
 
       - name: Notification sounds (8 tones into res/raw)
         working-directory: build

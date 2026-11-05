@@ -2,7 +2,7 @@
 (function(){
 const MSA = window.MSA, U = MSA.u, I = MSA.icon, $ = MSA.$, $$ = MSA.$$;
 const t = (k, v) => MSA.t(k, v);
-const NAV = [['active', 'briefcase'], ['done', 'trophy'], ['learn', 'grad'], ['tasks', 'checks']];
+const NAV = [['active', 'briefcase'], ['done', 'trophy'], ['learn', 'grad'], ['tasks', 'checks'], ['media', 'music'], ['reports', 'chart']];
 const S = () => MSA.state;
 
 /* ---------- appearance ---------- */

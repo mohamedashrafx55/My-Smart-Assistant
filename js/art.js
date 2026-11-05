@@ -103,6 +103,33 @@ function tasks(){
   g += star(44, 54, 5, '#c6ffe7') + star(204, 58, 6, '#ffffff');
   return svg(g);
 }
-MSA.art = { active: active, done: done, learn: learn, tasks: tasks };
+/* 5 — music & video: screen with a play badge + vinyl record + notes */
+function media(){
+  const id = 'm';
+  let g = defs(id, '#ff6b9a', '<linearGradient id="mscr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b3b66"/><stop offset="1" stop-color="#1c1c36"/></linearGradient><linearGradient id="mrec" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a3a48"/><stop offset="1" stop-color="#15151c"/></linearGradient>');
+  g += shadow(id, 86);
+  g += '<g transform="translate(0 4)"><rect x="40" y="44" width="116" height="80" rx="11" fill="#0f0f24" transform="translate(6 7)"/><rect x="40" y="44" width="116" height="80" rx="11" fill="url(#mscr)" stroke="#8a8ad8" stroke-opacity=".5" stroke-width="1.5"/>' +
+    '<path d="M48 112 L72 92 L88 104 L112 80 L148 112 Z" fill="#6f6fe0" opacity=".35"/><circle cx="130" cy="62" r="7" fill="#ffd45e" opacity=".9"/>' +
+    '<circle cx="98" cy="84" r="19" fill="#ff5d8a"/><circle cx="98" cy="84" r="19" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="2"/><path d="M92 74 L110 84 L92 94 Z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>' +
+    '<rect x="50" y="116" width="76" height="3.5" rx="1.7" fill="#fff" opacity=".25"/><rect x="50" y="116" width="44" height="3.5" rx="1.7" fill="#ff5d8a"/></g>';
+  g += '<g transform="translate(176 112)"><ellipse cy="30" rx="30" ry="6" fill="#000" opacity=".25" filter="url(#' + id + 'b)"/><circle r="32" fill="url(#mrec)"/><circle r="32" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="1.5"/>' +
+    [8, 14, 20, 26].map(r => '<circle r="' + (r + 4) + '" fill="none" stroke="#fff" stroke-opacity=".12" stroke-width="1"/>').join('') + '<circle r="11" fill="#ffb02e"/><circle r="3" fill="#15151c"/><path d="M-24 -18 A30 30 0 0 1 -6 -29" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="3" stroke-linecap="round"/></g>';
+  g += '<g transform="translate(196 52)"><ellipse cx="-6" cy="14" rx="7" ry="5.4" fill="#ffffff"/><path d="M0 14 V-12 L14 -8 V-4 L4 -7 V14" fill="#ffffff"/></g>';
+  g += star(44, 38, 6, '#ffd3e2') + star(210, 100, 4, '#ffffff') + star(34, 150, 4, '#ffd3e2');
+  return svg(g);
+}
+
+/* 6 — reports: 3D bars + trend arrow + donut */
+function reports(){
+  const id = 'q', a = pal('#18b4c8'), b = pal('#3e8ef0'), c = pal('#f0b43c');
+  let g = defs(id, '#18b4c8');
+  g += shadow(id, 90);
+  [[66, 133 - 34, 34, a], [108, 133 - 62, 62, b], [150, 133 - 92, 92, c]].forEach(([cx, cy, h, col]) => { g += boxC(cx + 12, cy + 4, 32, 32, h, col); });
+  g += '<g transform="translate(42 62)"><polyline points="0,40 34,18 58,30 112,-14" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="0,40 34,18 58,30 112,-14" fill="none" stroke="#ff5d73" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M100 -18 L116 -17 L110 -2" fill="none" stroke="#ff5d73" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>';
+  g += '<g transform="translate(196 124)"><circle r="26" fill="#0f2e3a" transform="translate(3 4)"/><circle r="26" fill="#e9fbff"/><path d="M0 0 L0 -26 A26 26 0 0 1 22.5 13 Z" fill="#18b4c8"/><path d="M0 0 L22.5 13 A26 26 0 0 1 -18 18.8 Z" fill="#f0b43c"/><circle r="11" fill="#e9fbff"/></g>';
+  g += star(40, 44, 6, '#c8f4fb') + star(212, 56, 5, '#ffffff') + star(36, 150, 4, '#c8f4fb');
+  return svg(g);
+}
+MSA.art = { active: active, done: done, learn: learn, tasks: tasks, media: media, reports: reports };
 })();
 

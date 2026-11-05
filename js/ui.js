@@ -166,7 +166,7 @@ MSA.closeCtx = closeCtx;
 /* ---------- attachments ---------- */
 const ACCEPT = {
   image: 'image/*',
-  video: 'video/*',
+  video: 'video/*,.mkv,.avi,.mov,.m4v,.wmv,.flv,.mp4,.webm',
   audio: 'audio/*',
   doc: '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.rtf,.zip,.rar,.7z,.psd,.ai,.eps,.indd,.fig,.sketch,.xd,.svg,.json'
 };
@@ -219,14 +219,14 @@ MSA.downloadAtt = async function(a){
   const u = await MSA.files.url(a.id); if (!u) return;
   const l = document.createElement('a'); l.href = u; l.download = a.name; document.body.appendChild(l); l.click(); l.remove();
 };
-function linkView(cur, box){
+function linkView(cur, box, m){
   const draw = () => {
     box.innerHTML = '<div class="lkv"><div class="lkv-c">' + MSA.linkCover(cur) + '<button class="lkv-play" id="lkGo" aria-label="' + U.esc(t('cap.linkOpen')) + '">' + I('play') + '</button></div>' +
       '<div class="lkv-n" dir="auto">' + U.esc(cur.name || '') + '</div><div class="hint" dir="ltr">' + U.esc(cur.url) + '</div>' +
       '<div class="row" style="justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn primary" id="lkOpen">' + I('link', 'sm') + U.esc(t('cap.linkOpen')) + '</button>' +
       '<button class="btn" id="lkCopy">' + I('copy', 'sm') + U.esc(t('cap.linkCopy')) + '</button><button class="btn" id="lkCov">' + I('image', 'sm') + U.esc(t('cap.linkCover')) + '</button></div></div>';
     MSA.hydrateAtts(box);
-    const open = () => MSA.openLink(cur.url);
+    const open = () => { const pb = MSA.player && MSA.player.playable(cur.url); if (pb) { m && m.close(); MSA.player.open(pb.kind === 'embed' ? { title: cur.name, embed: pb.url } : { title: cur.name, src: pb.url }); } else MSA.openLink(cur.url); };
     $('#lkGo', box).onclick = open; $('#lkOpen', box).onclick = open;
     $('#lkCopy', box).onclick = async () => { try { await navigator.clipboard.writeText(cur.url); MSA.toast(t('cap.linkCopied'), 'ok'); } catch (e) { MSA.toast(cur.url); } };
     $('#lkCov', box).onclick = async () => {
@@ -239,13 +239,14 @@ function linkView(cur, box){
   draw();
 }
 MSA.openAtt = async function(a, list){
+  if (a.kind === 'video' && MSA.player) { await MSA.player.openStored(a.id, a.name, a.name); return; }
   list = list && list.length ? list : [a];
   let idx = Math.max(0, list.findIndex(x => x.id === a.id));
   const m = MSA.modal({ title: a.name, size: 'wide', footer: false, body: '<div class="viewer" id="vwr"></div>' });
   const show = async () => {
     const cur = list[idx]; $('h3', m.el).textContent = cur.name;
     const box = $('#vwr', m.el); box.innerHTML = '';
-    if (cur.kind === 'link') { linkView(cur, box); return; }
+    if (cur.kind === 'link') { linkView(cur, box, m); return; }
     const u = await MSA.files.url(cur.id);
     if (!u) { box.innerHTML = '<p class="muted">' + U.esc(t('fileMissing')) + '</p>'; return; }
     if (cur.kind === 'image') box.innerHTML = '<img src="' + u + '" alt="">';
