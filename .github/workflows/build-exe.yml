@@ -60,7 +60,7 @@ jobs:
           JSON
           cat > preload.js <<'JS'
           const { contextBridge, ipcRenderer } = require('electron');
-          contextBridge.exposeInMainWorld('msaDesktop', { installUpdate: (url) => ipcRenderer.invoke('msa-update', url) });
+          contextBridge.exposeInMainWorld('msaDesktop', { installUpdate: (url) => ipcRenderer.invoke('msa-update', url), onUpdateProgress: (cb) => { ipcRenderer.removeAllListeners('msa-update-progress'); ipcRenderer.on('msa-update-progress', (_e, p) => { try { cb(p); } catch (e) {} }); } });
           JS
           node --check preload.js
           cat > main.js <<'JS'
@@ -104,20 +104,42 @@ jobs:
           }
 
           /* in-app update: download the installer from this project's GitHub Releases and start it */
-          ipcMain.handle('msa-update', async (_e, url) => {
+          ipcMain.handle('msa-update', async (e, url) => {
+            const send = (p) => { try { e.sender.send('msa-update-progress', p); } catch (x) {} };
             try {
               if (typeof url !== 'string' || !url.startsWith('https://github.com/mohamedashrafx55/My-Smart-Assistant/releases/download/') || !/\.exe$/i.test(url)) return { ok: false, error: 'bad url' };
               const res = await net.fetch(url);
               if (!res.ok) return { ok: false, error: 'http ' + res.status };
-              const buf = Buffer.from(await res.arrayBuffer());
+              const total = Number(res.headers.get('content-length')) || 0;
+              const chunks = []; let got = 0, lastPct = -1;
+              const reader = res.body.getReader();
+              for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(Buffer.from(value)); got += value.length;
+                if (total) { const pct = Math.min(100, Math.floor(got * 100 / total)); if (pct !== lastPct) { lastPct = pct; send({ percent: pct, got, total }); } }
+              }
+              const buf = Buffer.concat(chunks);
               if (buf.length < 1000000) return { ok: false, error: 'too small' };
-              const file = path.join(os.tmpdir(), 'My-Smart-Assistant-Setup-update.exe');
+              send({ percent: 100, got: buf.length, total: buf.length });
+              const dl = app.getPath('downloads');
+              const file = path.join(fs.existsSync(dl) ? dl : os.tmpdir(), 'My-Smart-Assistant-Setup-update.exe');
               fs.writeFileSync(file, buf);
-              const err = await shell.openPath(file);
-              if (err) return { ok: false, error: err };
+              /* start detached; if Windows (Smart App Control / SmartScreen) refuses, report it and keep the app open */
+              const started = await new Promise((resolve) => {
+                let done = false; const fin = (v) => { if (!done) { done = true; resolve(v); } };
+                try {
+                  const cp = require('child_process').spawn(file, [], { detached: true, stdio: 'ignore' });
+                  cp.on('error', (er) => fin({ err: String(er && er.message || er) }));
+                  cp.on('exit', (code) => { if (code) fin({ err: 'exit ' + code }); });
+                  cp.unref();
+                  setTimeout(() => fin({ ok: true }), 2500);
+                } catch (er) { fin({ err: String(er && er.message || er) }); }
+              });
+              if (started.err) { try { shell.showItemInFolder(file); } catch (x) {} return { ok: false, blocked: true, file, error: started.err }; }
               setTimeout(() => { quitting = true; app.quit(); }, 1500);
               return { ok: true };
-            } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+            } catch (er) { return { ok: false, error: String(er && er.message || er) }; }
           });
 
           app.on('second-instance', showWindow);

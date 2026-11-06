@@ -62,7 +62,14 @@ async function install(res, ui){
   const note = nEl ? { set textContent(v) { nEl.textContent = v; } } : null;
   if (p === 'windows' && window.msaDesktop && window.msaDesktop.installUpdate) {
     if (note) note.textContent = T('جاري تنزيل التحديث…', 'Downloading the update…'); MSA.toast(T('جاري تنزيل التحديث… سيُغلق البرنامج ويبدأ التثبيت', 'Downloading… the app will close and the installer will start'), 'ok', 6000);
-    try { const r = await window.msaDesktop.installUpdate(info.url); if (r && r.ok) return; } catch (e) {}
+    try { if (window.msaDesktop.onUpdateProgress) window.msaDesktop.onUpdateProgress(e => { if (note && e && e.percent != null) note.textContent = T('جاري تنزيل التحديث… ', 'Downloading the update… ') + e.percent + '%'; }); } catch (e) {}
+    let r = null;
+    try { r = await window.msaDesktop.installUpdate(info.url); if (r && r.ok) return; } catch (e) {}
+    if (r && r.blocked) {
+      if (note) note.textContent = T('ويندوز منع تشغيل المُثبّت', 'Windows blocked the installer');
+      MSA.modal && MSA.modal({ title: T('ويندوز منع تشغيل المُثبّت', 'Windows blocked the installer'), body: '<div dir="auto" style="line-height:1.9">' + esc(T('اتنزّل المُثبّت في مجلد التنزيلات وفتحتلك مكانه. السبب إن البرنامج غير موقَّع رقميًا فـ «Smart App Control» بيمنعه — ده مش عطل في التطبيق.', 'The installer was saved to your Downloads folder and revealed. Windows Smart App Control blocks it because the app is not code-signed.')) + '<br><br><b>' + esc(T('الحلول:', 'Options:')) + '</b><br>1) ' + esc(T('اضغط كليك يمين على الملف ← خصائص ← «إلغاء الحظر» ← تطبيق، وشغّله (لو SAC شغّال ممكن يفضل يمنع).', 'Right-click the file → Properties → Unblock → Apply, then run it (may still be blocked if SAC is on).')) + '<br>2) ' + esc(T('لو عايز تكمل بنفس النسخة: ثبّت التطبيق من Edge (⋯ ← التطبيقات ← تثبيت هذا الموقع كتطبيق) وهيتحدّث تلقائي.', 'Alternatively install the PWA from Edge (⋯ → Apps → Install this site) — it updates automatically.')) + '<br>3) ' + esc(T('أو عطّل Smart App Control من الإعدادات ← الخصوصية والأمان ← أمان Windows ← التحكم في التطبيق والمتصفح (ملحوظة: مينفعش ترجعه تاني إلا بإعادة ضبط ويندوز).', 'Or turn off Smart App Control in Windows Security → App & browser control (it cannot be re-enabled without resetting Windows).')) + '</div>', buttons: [{ label: T('إغلاق', 'Close'), cls: 'ghost', onClick: a => a.close() }, { label: T('فتح صفحة التحميل', 'Open download page'), cls: 'primary', onClick: a => { a.close(); MSA.openLink(info.page); } }] });
+      return;
+    }
     MSA.toast(T('تعذّر التثبيت التلقائي — هيتفتح رابط التحميل', 'Automatic install failed — opening the download page'), 'err', 5000); MSA.openLink(info.page); return;
   }
   /* Android, inside the app: download the APK here (with progress), then open the system installer */
