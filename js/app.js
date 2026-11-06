@@ -42,6 +42,7 @@ MSA.applyProfile = function(){ const f = $('#navFoot'); if (f) f.textContent = S
 function buildTop(){
   const g = $('#btnSettings'); g.innerHTML = I('gear', 'lg') + '<span class="gear-lbl">' + U.esc(t('settings')) + '</span>';
   g.setAttribute('aria-label', t('settings'));
+  const gb = $('#btnGuide'); if (gb) { gb.innerHTML = I('book', 'lg'); gb.setAttribute('aria-label', t('guide.title')); gb.title = t('guide.title'); }
   const th = $('#btnTheme'); if (th) th.setAttribute('aria-label', t('theme'));
 }
 function buildNav(){
@@ -90,6 +91,7 @@ function boot(){
   seed();
   buildNav(); buildTop(); MSA.applyProfile(); tickClock(); setInterval(tickClock, 30000);
   $('#btnSettings').addEventListener('click', () => MSA.openSettings());
+  $('#btnGuide').addEventListener('click', () => MSA.openGuide && MSA.openGuide());
   $('#btnHome').addEventListener('click', () => MSA.go('home'));
   $('.brand').addEventListener('click', () => MSA.go('home'));
   $('#btnTheme').addEventListener('click', () => { S().settings.theme = MSA.effectiveTheme() === 'dark' ? 'light' : 'dark'; MSA.save(); MSA.applyTheme(); if (MSA.refreshSettings) MSA.refreshSettings(); });
