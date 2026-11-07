@@ -21,18 +21,90 @@ const all = () => BUILT.map((b, i) => ({ id: b[0], name: b[1], short: b[2], colo
   .concat(st().custom.map((c, i) => ({ id: c.id, name: c.name, short: c.short || c.name.slice(0, 2), color: colorFor(BUILT.length + i), built: false })));
 const get = id => all().find(x => x.id === id);
 
+
+/* ---- official logos: fetched from the public Iconify icon service, cached on the device and re-checked every 7 days,
+   so when a logo is updated upstream the app picks the new one up by itself. A logo you upload yourself always wins. ---- */
+const IC = 'https://api.iconify.design/';
+/* per program: [iconify set, icon name] candidates tried in order, and the brand colour used for single-colour sets */
+const SRC = {
+  ps: ['31A8FF', ['logos', 'adobe-photoshop'], ['simple-icons', 'adobephotoshop'], ['streamline-logos', 'adobe-photoshop-logo']],
+  ai: ['FF9A00', ['logos', 'adobe-illustrator'], ['simple-icons', 'adobeillustrator'], ['streamline-logos', 'adobe-illustrator-logo']],
+  id: ['FF3366', ['logos', 'adobe-indesign'], ['simple-icons', 'adobeindesign'], ['streamline-logos', 'adobe-indesign-logo']],
+  lr: ['31A8FF', ['logos', 'adobe-lightroom'], ['simple-icons', 'adobelightroom'], ['streamline-logos', 'adobe-lightroom-logo']],
+  pr: ['9999FF', ['logos', 'adobe-premiere'], ['simple-icons', 'adobepremierepro'], ['streamline-logos', 'adobe-premiere-pro-logo']],
+  ae: ['9999FF', ['logos', 'adobe-after-effects'], ['simple-icons', 'adobeaftereffects'], ['streamline-logos', 'adobe-after-effects-logo']],
+  au: ['00E4BB', ['logos', 'adobe-audition'], ['simple-icons', 'adobeaudition'], ['streamline-logos', 'adobe-audition-logo']],
+  mp: ['9999FF', ['logos', 'adobe-media-encoder'], ['simple-icons', 'adobemediaencoder'], ['streamline-logos', 'adobe-media-encoder-logo']],
+  xd: ['FF61F6', ['logos', 'adobe-xd'], ['simple-icons', 'adobexd'], ['streamline-logos', 'adobe-xd-logo']],
+  fr: ['FF3366', ['logos', 'adobe-fresco'], ['simple-icons', 'adobefresco'], ['streamline-logos', 'adobe-fresco-logo']],
+  rs: ['233A51', ['logos', 'davinci-resolve'], ['simple-icons', 'davinciresolve']],
+  fc: ['9B9B9B', ['logos', 'final-cut-pro'], ['simple-icons', 'finalcutpro']],
+  cc: ['B0B0B0', ['simple-icons', 'capcut'], ['logos', 'capcut']],
+  fg: ['F24E1E', ['logos', 'figma'], ['simple-icons', 'figma']],
+  cv: ['00C4CC', ['logos', 'canva'], ['simple-icons', 'canva']],
+  cd: ['4EB547', ['logos', 'coreldraw'], ['simple-icons', 'coreldraw']],
+  bl: ['E87D0D', ['logos', 'blender'], ['simple-icons', 'blender']],
+  c4: ['011A6A', ['logos', 'cinema-4d'], ['simple-icons', 'cinema4d']],
+  pc: ['9B9B9B', ['simple-icons', 'procreate'], ['logos', 'procreate']],
+  mj: ['9B9B9B', ['simple-icons', 'midjourney'], ['logos', 'midjourney']]
+};
+const OKEY = 'msa_applogos_v1', STALE = 7 * 24 * 3600 * 1000;
+let OC = {}; try { OC = JSON.parse(localStorage.getItem(OKEY) || '{}') || {}; } catch (e) { OC = {}; }
+const saveOC = () => { try { localStorage.setItem(OKEY, JSON.stringify(OC)); } catch (e) {} };
+const toData = svg => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+const officialSync = id => (OC[id] && OC[id].svg) ? toData(OC[id].svg) : null;
+const hasOfficial = id => !!SRC[id];
+async function fetchTxt(u){
+  const ctl = typeof AbortController === 'function' ? new AbortController() : null, tm = setTimeout(() => ctl && ctl.abort(), 7000);
+  try { const r = await fetch(u, ctl ? { signal: ctl.signal } : undefined); if (!r.ok) return null; const t = await r.text(); return /^\s*<svg[\s>]/i.test(t) && t.length > 80 && t.length < 400000 ? t : null; }
+  catch (e) { return null; } finally { clearTimeout(tm); }
+}
+const inflight = new Map();
+function refreshOfficial(id, force){
+  const src = SRC[id]; if (!src) return Promise.resolve(null);
+  const c = OC[id]; if (!force && c && c.svg && Date.now() - c.ts < STALE) return Promise.resolve(toData(c.svg));
+  if (inflight.has(id)) return inflight.get(id);
+  const p = (async () => {
+    for (let i = 1; i < src.length; i++) {
+      const [set, name] = src[i], mono = set === 'simple-icons';
+      const t = await fetchTxt(IC + set + '/' + name + '.svg' + (mono ? '?color=%23' + src[0] : ''));
+      if (t) { const changed = !c || c.svg !== t; OC[id] = { svg: t, ts: Date.now(), from: set + ':' + name }; saveOC(); if (changed) repaint(id); return toData(t); }
+    }
+    if (c && c.svg) { c.ts = Date.now() - STALE + 6 * 3600 * 1000; saveOC(); return toData(c.svg); }  /* offline: keep what we have, try again in 6 hours */
+    return null;
+  })().finally(() => inflight.delete(id));
+  inflight.set(id, p); return p;
+}
+/* a logo arrived or changed: update every badge of that program already on screen */
+function repaint(id){
+  $$('.appb[data-app="' + id + '"]').forEach(b => {
+    if (st().logos[id]) return;
+    const u = officialSync(id); if (!u) return;
+    b.classList.add('has'); b.innerHTML = '<img data-alogo="' + esc(id) + '" alt="' + esc(b.title || '') + '" src="' + u + '">';
+  });
+}
+/* keep every known logo fresh in the background (one at a time, silent) */
+let sweeping = false;
+async function sweep(){
+  if (sweeping || (typeof navigator !== 'undefined' && navigator.onLine === false)) return; sweeping = true;
+  try { for (const id of Object.keys(SRC)) { const c = OC[id]; if (!c || !c.svg || Date.now() - c.ts >= STALE) { await refreshOfficial(id); await new Promise(r => setTimeout(r, 150)); } } } catch (e) {} finally { sweeping = false; }
+}
+setTimeout(sweep, 6000);
+window.addEventListener('online', () => setTimeout(sweep, 1500));
+
 const urls = new Map();
 async function logoUrl(id){
-  const a = st().logos[id]; if (!a) return null;
+  const a = st().logos[id];
+  if (!a) { const sy = officialSync(id); if (sy) { refreshOfficial(id); return sy; } return hasOfficial(id) ? refreshOfficial(id, !OC[id]) : null; }
   if (urls.has(a.id)) return urls.get(a.id);
   const u = await MSA.files.url(a.id); if (u) urls.set(a.id, u); return u;
 }
 /* badge markup; call MSA.apps.hydrate(root) afterwards to load uploaded logos */
 function badge(id, size){
   const x = get(id); if (!x) return '';
-  const has = !!st().logos[id], sz = size || 24;
+  const has = !!st().logos[id] || hasOfficial(id), sz = size || 24, pre = !st().logos[id] ? officialSync(id) : null;
   return '<span class="appb' + (has ? ' has' : '') + '" data-app="' + esc(id) + '" title="' + esc(x.name) + '" style="width:' + sz + 'px;height:' + sz + 'px;--ac:' + x.color + ';font-size:' + Math.round(sz * .42) + 'px">' +
-    (has ? '<img data-alogo="' + esc(id) + '" alt="' + esc(x.name) + '">' : '<b>' + esc(x.short) + '</b>') + '</span>';
+    (has ? '<img data-alogo="' + esc(id) + '" alt="' + esc(x.name) + '"' + (pre ? ' src="' + pre + '"' : '') + '>' : '<b>' + esc(x.short) + '</b>') + '</span>';
 }
 function hydrate(root){
   $$('[data-alogo]', root || document).forEach(async im => { if (im.src) return; const u = await logoUrl(im.dataset.alogo); if (u) im.src = u; else { const b = im.closest('.appb'); if (b) { b.classList.remove('has'); b.innerHTML = '<b>' + esc((get(im.dataset.alogo) || {}).short || '') + '</b>'; } } });
@@ -51,12 +123,20 @@ async function setLogo(id){
 async function clearLogo(id){ const old = st().logos[id]; if (!old) return; delete st().logos[id]; urls.delete(old.id); try { await MSA.files.del(old.id); } catch (e) {} MSA.save(); }
 
 /* the picker: tap programs to toggle them on the step; pencil = set / change logo; "+" = new program */
-function pick(step, done){
+function pick(step, done, tabName){
   step.apps = step.apps || [];
-  const m = MSA.modal({ title: T('البرامج المستخدمة في هذه المرحلة', 'Programs used in this step'), size: 'wide', footer: false, body: '<div id="apBody"></div>',
+  let tab = tabName || (MSA.state.ui && MSA.state.ui.apTab) || 'apps';
+  const m = MSA.modal({ title: T('البرامج والمواقع المستخدمة في هذه الخطوة', 'Programs & sites used in this step'), size: 'wide', footer: false, body: '<div class="ap-tabs" id="apTabs"></div><div id="apBody"></div>',
     onClose: () => { done && done(); } });
-  const body = $('#apBody', m.el);
+  const body = $('#apBody', m.el), tabs = $('#apTabs', m.el);
+  const drawTabs = () => {
+    tabs.innerHTML = '<button data-tb="apps" class="' + (tab === 'apps' ? 'on' : '') + '">' + I('grid', 'sm') + esc(T('البرامج المستخدمة', 'Programs used')) + (step.apps.length ? '<i>' + step.apps.length + '</i>' : '') + '</button>' +
+      '<button data-tb="sites" class="' + (tab === 'sites' ? 'on' : '') + '">' + I('globe', 'sm') + esc(T('المواقع المستخدمة', 'Sites used')) + ((step.sites || []).length ? '<i>' + step.sites.length + '</i>' : '') + '</button>';
+    $$('[data-tb]', tabs).forEach(b => b.onclick = () => { tab = b.dataset.tb; try { MSA.state.ui.apTab = tab; MSA.save(); } catch (e) {} draw(); });
+  };
   const draw = () => {
+    drawTabs();
+    if (tab === 'sites' && MSA.sites) { MSA.sites.draw(body, step, draw); return; }
     body.innerHTML = '<div class="hint" style="margin-bottom:10px">' + esc(T('اضغط على البرنامج لإضافته أو إزالته. القلم لتغيير اللوجو (ارفع اللوجو الرسمي مرة واحدة وهيظهر في كل المراحل).', 'Tap a program to add or remove it. The pencil sets its logo (upload the official logo once and it shows everywhere).')) + '</div>' +
       '<div class="ap-grid">' + all().map(x => {
         const on = step.apps.includes(x.id);
@@ -81,7 +161,7 @@ function pick(step, done){
     const has = !!st().logos[id];
     const mm = MSA.modal({ title: x.name, footer: false, body: '<div class="row" style="justify-content:center;margin-bottom:12px">' + badge(id, 72) + '</div><div class="col" style="gap:8px">' +
       '<button class="btn primary" data-a="up">' + I('upload', 'sm') + esc(T('رفع اللوجو (PNG / SVG / JPG)', 'Upload logo (PNG / SVG / JPG)')) + '</button>' +
-      (has ? '<button class="btn" data-a="rm">' + I('x', 'sm') + esc(T('إزالة اللوجو (الرجوع للشارة)', 'Remove logo (back to badge)')) + '</button>' : '') +
+      (has ? '<button class="btn" data-a="rm">' + I('x', 'sm') + esc(T('إزالة لوجوي (الرجوع للّوجو الرسمي)', 'Remove my logo (back to the official one)')) + '</button>' : '') +
       (!x.built ? '<button class="btn" data-a="ren">' + I('pencil', 'sm') + esc(T('تغيير الاسم', 'Rename')) + '</button><button class="btn danger" data-a="del">' + I('trash', 'sm') + esc(T('حذف البرنامج', 'Delete program')) + '</button>' : '') + '</div>' });
     hydrate(mm.el);
     $('[data-a=up]', mm.el).onclick = async () => { if (await setLogo(id)) { mm.close(); draw(); } };

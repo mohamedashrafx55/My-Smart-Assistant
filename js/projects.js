@@ -62,11 +62,12 @@ function stepHTML(s, depth){
       '<input type="checkbox" class="cb ' + (part ? 'indet' : '') + '" data-act="toggle" ' + (done ? 'checked' : '') + ' aria-label="' + U.esc(t('markDone')) + '">' +
       '<div class="step-title"><span class="ttl">' + U.esc(P.title(s)) + '</span>' + (hint ? '<span class="step-hint">' + U.esc(hint) + '</span>' : '') + '</div>' +
       (MSA.plus && MSA.plus.dueChip ? MSA.plus.dueChip(s) : '') + (done ? '<span class="done-mark">' + I('check', 'sm') + U.esc(t('done')) + '</span>' : '') +
-      '<div class="add-btns">' + (s.key === 'mood' ? '<button class="btn sm primary" data-act="board" title="' + U.esc(MSA.T('مود بورد (زي PureRef)', 'Moodboard (PureRef-style)')) + '">' + I('layers', 'sm') + U.esc(MSA.T('فتح المود بورد', 'Open moodboard')) + '</button>' : '') + '<button class="icon-btn" data-act="apps" title="' + U.esc(MSA.T('البرامج المستخدمة', 'Programs used')) + '" aria-label="apps">' + I('grid', 'sm') + '</button><button class="btn sm sug-btn" data-act="sug" title="' + U.esc(MSA.T('اقتراحات لهذه الخطوة','Suggestions for this step')) + '">' + I('sparkles', 'sm') + U.esc(MSA.T('الاقتراحات','Suggestions')) + '</button>' + btn('image', 'image') + btn('doc', 'doc') + btn('video', 'video') + btn('audio', 'music') + (MSA.tips ? MSA.tips.btn(s, current()) : '') +
+      '<div class="add-btns">' + (s.key === 'mood' ? '<button class="btn sm primary" data-act="board" title="' + U.esc(MSA.T('مود بورد (زي PureRef)', 'Moodboard (PureRef-style)')) + '">' + I('layers', 'sm') + U.esc(MSA.T('فتح المود بورد', 'Open moodboard')) + '</button>' : '') + '<button class="icon-btn" data-act="apps" title="' + U.esc(MSA.T('البرامج والمواقع المستخدمة', 'Programs & sites used')) + '" aria-label="apps">' + I('grid', 'sm') + '</button><button class="btn sm sug-btn" data-act="sug" title="' + U.esc(MSA.T('اقتراحات لهذه الخطوة','Suggestions for this step')) + '">' + I('sparkles', 'sm') + U.esc(MSA.T('الاقتراحات','Suggestions')) + '</button>' + btn('image', 'image') + btn('doc', 'doc') + btn('video', 'video') + btn('audio', 'music') + (MSA.tips ? MSA.tips.btn(s, current()) : '') +
         '<button class="icon-btn" data-act="note" title="' + U.esc(t('note')) + '" aria-label="' + U.esc(t('note')) + '">' + I('pencil', 'sm') + '</button>' +
         '<button class="icon-btn" data-act="more" aria-label="' + U.esc(t('more')) + '">' + I('more', 'sm') + '</button></div>' +
     '</div>' +
     (s.apps && s.apps.length ? '<div class="step-apps" data-act="apps">' + MSA.apps.chips(s, 26) + '</div>' : '') +
+    (s.sites && s.sites.length && MSA.sites ? '<div class="step-apps step-sites" data-act="sites">' + MSA.sites.chips(s, 26) + '</div>' : '') +
     (MSA.tips ? MSA.tips.box(s, current()) : '') +
     (s.atts.length ? '<div class="atts">' + s.atts.map(a => MSA.attHTML(a, true)).join('') + '</div>' : '') +
     (noteOpen ? '<div class="note-box"><textarea data-note placeholder="' + U.esc(t('notePh')) + '">' + U.esc(s.note) + '</textarea></div>' : '') +
@@ -123,7 +124,8 @@ function bind(host){
     pick: el => { P.mapReset && P.mapReset(); MSA.state.ui.project = el.dataset.id; MSA.save(); MSA.rerender(false); },
     toggle: (el) => { const r = stepOf(el); if (!r) return; P.setDone(r.step, el.checked); refresh(); if (el.checked && P.progress(p()).pct === 100) MSA.toast(t('allDone'), 'ok', 3600); },
     add: async el => { const r = stepOf(el); if (!r) return; const atts = await MSA.addFiles(el.dataset.kind); if (atts.length) { r.step.atts.push(...atts); refresh(); } },
-    apps: el => { const r = stepOf(el); if (r) MSA.apps.pick(r.step, () => { MSA.save(); MSA.rerender(true); }); },
+    apps: el => { const r = stepOf(el); if (r) MSA.apps.pick(r.step, () => { MSA.save(); MSA.rerender(true); }, 'apps'); },
+    sites: el => { const r = stepOf(el); if (r) MSA.apps.pick(r.step, () => { MSA.save(); MSA.rerender(true); }, 'sites'); },
     board: el => { const r = stepOf(el); if (r) MSA.board.open(p(), r.step); },
     sug: el => { const r = stepOf(el); if (r && MSA.suggest) MSA.suggest.open(p(), r.step); },
     identity: () => { if (MSA.suggest) MSA.suggest.openIdentity(p()); },
@@ -134,7 +136,7 @@ function bind(host){
       const r = stepOf(el); if (!r) return; const rc = el.getBoundingClientRect();
       MSA.ctx(rc.left, rc.bottom + 4, [
         { icon: 'pencil', label: t('rename'), onClick: async () => { const v = await MSA.ask({ title: t('rename'), value: P.title(r.step) }); if (v) { r.step.title = v; refresh(); } } },
-        { icon: 'grid', label: MSA.T('البرامج المستخدمة', 'Programs used'), onClick: () => MSA.apps.pick(r.step, () => { MSA.save(); MSA.rerender(true); }) },
+        { icon: 'grid', label: MSA.T('البرامج والمواقع المستخدمة', 'Programs & sites used'), onClick: () => MSA.apps.pick(r.step, () => { MSA.save(); MSA.rerender(true); }) },
         { icon: 'image', label: MSA.T('اختيار صورة غلاف الخلية…', 'Choose cell cover…'), onClick: () => MSA.cover.pickStep(p(), r.step, () => MSA.rerender(true)) },
         { icon: 'layers', label: MSA.T('فتح كمود بورد', 'Open as moodboard'), onClick: () => MSA.board.open(p(), r.step) },
         { icon: 'plus', label: t('addSubStep'), onClick: async () => { const v = await MSA.ask({ title: t('addSubStep'), placeholder: t('stepName') }); if (v) { r.step.children.push({ id: U.uid('s'), key: null, title: v, done: false, note: '', atts: [], children: [] }); r.step.done = false; refresh(); } } },
