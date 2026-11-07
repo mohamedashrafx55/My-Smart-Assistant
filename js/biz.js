@@ -30,13 +30,13 @@ plus.fmt0 = n => Math.round(n).toLocaleString(en() ? 'en-US' : 'ar-EG');
 plus.pay = { total, paid: paidOf, remaining: remOf, status, isLate, cur: curOf };
 plus.convertPay = (p, conv) => { if (p.pay) p.pay.items.forEach(x => { x.amt = conv(x.amt); }); };
 
-function addPayment(p, done){
-  const rem = remOf(p);
+function addPayment(p, done, preset){
+  const rem = preset && preset.amt != null ? preset.amt : remOf(p);
   MSA.modal({
     title: T('تسجيل دفعة', 'Record a payment'),
     body: '<div class="field"><label class="f">' + esc(T('المبلغ', 'Amount')) + ' (' + curOf(p) + ')</label><input id="pyAmt" type="number" min="0" step="any" value="' + (rem > 0 ? Math.round(rem * 100) / 100 : '') + '"></div>' +
       '<div class="field"><label class="f">' + esc(T('التاريخ', 'Date')) + '</label><input id="pyDate" type="date" value="' + today() + '"></div>' +
-      '<div class="field" style="margin:0"><label class="f">' + esc(T('ملاحظة (اختياري)', 'Note (optional)')) + '</label><input id="pyNote" type="text" dir="auto" placeholder="' + esc(T('مثال: عربون / تحويل فودافون كاش', 'e.g. deposit / bank transfer')) + '"></div>',
+      '<div class="field" style="margin:0"><label class="f">' + esc(T('ملاحظة (اختياري)', 'Note (optional)')) + '</label><input id="pyNote" type="text" dir="auto" value="' + esc((preset && preset.note) || '') + '" placeholder="' + esc(T('مثال: عربون / تحويل فودافون كاش', 'e.g. deposit / bank transfer')) + '"></div>',
     buttons: [{ label: T('إلغاء', 'Cancel'), cls: 'ghost', onClick: a => a.close() }, { label: T('تسجيل', 'Record'), cls: 'primary', onClick: a => {
       const amt = num($('#pyAmt', a.el).value); if (amt <= 0) { $('#pyAmt', a.el).focus(); return; }
       payOf(p).items.push({ id: U.uid('py'), date: $('#pyDate', a.el).value || today(), amt, note: $('#pyNote', a.el).value.trim() }); MSA.save(); a.close();
@@ -55,15 +55,125 @@ plus.payCard = function(p, host){
     '<div class="pay-sum"><div><span>' + esc(T('الإجمالي', 'Total')) + '</span><b dir="ltr">' + money(tot) + ' ' + c + '</b></div><div><span>' + esc(T('المدفوع', 'Paid')) + '</span><b dir="ltr" style="color:var(--ok,#2fa66d)">' + money(pd) + '</b></div><div><span>' + esc(T('المتبقي', 'Remaining')) + '</span><b dir="ltr" style="color:' + (rem > 0 ? '#e5484d' : 'var(--ok,#2fa66d)') + '">' + money(rem) + '</b></div></div>' +
     '<div class="progress" style="margin:10px 0"><i style="width:' + (tot > 0 ? Math.min(100, Math.round(pd / tot * 100)) : 0) + '%"></i></div>' +
     (y.items.length ? '<table class="st-tbl"><tbody>' + y.items.slice().sort((a, b) => a.date.localeCompare(b.date)).map(x => '<tr><td dir="ltr">' + esc(x.date) + '</td><td dir="auto">' + esc(x.note || '—') + '</td><td dir="ltr"><b>' + money(x.amt) + ' ' + c + '</b></td><td><button class="icon-btn sm danger" data-pdel="' + x.id + '" aria-label="delete">' + I('x', 'sm') + '</button></td></tr>').join('') + '</tbody></table>' : '<div class="hint">' + esc(T('لا توجد دفعات مسجلة بعد.', 'No payments recorded yet.')) + '</div>') +
+    planHTML(p) +
     '<div class="row" style="margin-top:12px"><button class="btn primary sm" data-pa="add">' + I('plus', 'sm') + esc(T('تسجيل دفعة', 'Record payment')) + '</button>' + (rem > 0.005 && tot > 0 ? '<button class="btn sm" data-pa="full">' + I('check', 'sm') + esc(T('تم دفع المتبقي', 'Mark fully paid')) + '</button>' : '') +
-    '<button class="btn sm" data-pa="msg">' + I('mail', 'sm') + esc(T('رسائل جاهزة', 'Ready messages')) + '</button>' +
+    '<button class="btn sm" data-pa="msg">' + I('mail', 'sm') + esc(T('رسائل جاهزة', 'Ready messages')) + '</button><button class="btn sm" data-pa="fin">' + I('pencil', 'sm') + esc(T('الوضع المالي', 'Financial setup')) + '</button>' +
     '<span class="grow"></span><label class="f" style="margin:0">' + esc(T('موعد الاستحقاق', 'Due date')) + '</label><input type="date" id="pyDue" value="' + esc(y.due) + '" style="width:auto"></div></div>';
   const redo = () => { plus.payCard(p, host); };
   $('[data-pa=add]', host).onclick = () => addPayment(p, redo);
   const full = $('[data-pa=full]', host); if (full) full.onclick = () => { payOf(p).items.push({ id: U.uid('py'), date: today(), amt: Math.round(remOf(p) * 100) / 100, note: T('تسوية المتبقي', 'Settlement') }); MSA.save(); redo(); };
   $('[data-pa=msg]', host).onclick = () => plus.messages({ pid: p.id, kind: rem > 0.005 && pd > 0 || y.due ? 'pay' : 'quote' });
+  const fin = $('[data-pa=fin]', host); if (fin) fin.onclick = () => plus.financeSetup(p, redo);
+  $$('[data-plan-pay]', host).forEach(b => b.onclick = () => { const m = (y.plan || []).find(x => x.id === b.dataset.planPay); if (!m) return; addPayment(p, redo, { amt: Math.round(total(p) * m.pct) / 100, note: m.label }); });
   $$('[data-pdel]', host).forEach(b => b.onclick = () => { y.items = y.items.filter(x => x.id !== b.dataset.pdel); MSA.save(); redo(); });
   $('#pyDue', host).onchange = e => { y.due = e.target.value; MSA.save(); };
+};
+
+
+/* =====================================================================
+   1b) FINANCIAL SETUP — asked when a project starts: billed by time, or by milestones
+   ===================================================================== */
+const hrsLeft = n => (Math.round(n * 2) / 2);
+const median = a => { const b = a.filter(x => x > 0).sort((x, y) => x - y); if (!b.length) return 0; const m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+const round50 = n => n > 0 ? Math.max(50, Math.round(n / 50) * 50) : 0;
+function leafCount(p){ let n = 0; P.walk(p.steps, s => { if (!s.children.length) n++; }); return n; }
+/* what we can honestly suggest, and where each number comes from */
+function suggestFor(p){
+  const others = S().projects.filter(x => x.id !== p.id && x.time);
+  const recent = others.filter(x => (x.time.rate > 0 || x.time.fixed > 0)).sort((a, b) => (b.created || 0) - (a.created || 0));
+  const cur = (recent[0] && recent[0].time.cur) || (p.time && p.time.cur) || 'EGP';
+  const same = recent.filter(x => (x.time.cur || 'EGP') === cur);
+  const rate = median(same.map(x => x.time.rate)), rateFrom = rate > 0 ? 'hist' : '';
+  const leaves = leafCount(p);
+  const sameType = p.type ? others.filter(x => x.type === p.type && hrsOf(x.time) > 0.25) : [];
+  let hours, hoursFrom;
+  if (sameType.length) { hours = hrsLeft(sameType.reduce((a, x) => a + hrsOf(x.time), 0) / sameType.length); hoursFrom = 'hist'; }
+  else { hours = Math.max(2, hrsLeft(leaves * 1.5)); hoursFrom = 'est'; }
+  const fixedHist = median((p.type ? others.filter(x => x.type === p.type) : []).filter(x => (x.time.cur || 'EGP') === cur).map(x => x.time.fixed));
+  let fixed = 0, fixedFrom = '';
+  if (fixedHist > 0) { fixed = fixedHist; fixedFrom = 'hist'; }
+  else if (rate > 0) { fixed = round50(rate * hours * 1.15); fixedFrom = 'calc'; }
+  const plan = leaves <= 10
+    ? [[T('عربون عند البدء', 'Deposit at start'), 50], [T('عند التسليم النهائي', 'On final delivery'), 50]]
+    : [[T('عربون عند البدء', 'Deposit at start'), 30], [T('عند اعتماد المسودة', 'On draft approval'), 40], [T('عند التسليم النهائي', 'On final delivery'), 30]];
+  return { cur, rate, rateFrom, hours, hoursFrom, fixed, fixedFrom, leaves, plan, n: others.length };
+}
+function planHTML(p){
+  const y = p.pay || {}, plan = y.plan || []; if (!plan.length) return '';
+  const tot = total(p), pd = paidOf(p), c = curOf(p); let cum = 0;
+  return '<div class="fin-plan"><div class="f" style="margin:12px 0 6px">' + esc(T('خطة الدفعات (Milestones)', 'Payment milestones')) + '</div>' +
+    plan.map(m => {
+      const amt = tot * m.pct / 100; cum += amt; const done = tot > 0 && pd + 0.005 >= cum;
+      return '<div class="fin-row' + (done ? ' ok' : '') + '"><span class="grow" dir="auto">' + esc(m.label) + ' <i dir="ltr">' + m.pct + '%</i></span><b dir="ltr">' + (tot > 0 ? money(amt) + ' ' + c : '—') + '</b>' +
+        (done ? '<span class="pill-s" style="background:#2fa66d">' + esc(T('اتدفعت', 'Paid')) + '</span>' : (tot > 0 ? '<button class="btn sm" data-plan-pay="' + m.id + '">' + esc(T('سجّل الدفعة', 'Record')) + '</button>' : '')) + '</div>';
+    }).join('') + '</div>';
+}
+plus.financeSetup = function(p, done){
+  const tm = p.time = Object.assign({ rate: 0, cur: 'EGP', client: '', fixed: 0, notes: '', run: null, entries: [], extras: [], seq: 0 }, p.time || {});
+  const sg = suggestFor(p), had = !!(tm.model);
+  let model = tm.model || '', cur = had ? tm.cur : sg.cur;
+  let rate = had && tm.rate > 0 ? tm.rate : sg.rate, hours = tm.estHours > 0 ? tm.estHours : sg.hours;
+  let fixed = had && tm.fixed > 0 ? tm.fixed : sg.fixed;
+  let plan = (p.pay && p.pay.plan && p.pay.plan.length ? p.pay.plan.map(x => [x.label, x.pct]) : sg.plan.map(x => x.slice()));
+  const src = k => ({ hist: T('من متوسط مشاريعك السابقة', 'from your earlier projects'), est: T('تقدير مبدئي حسب عدد الخطوات — عدّله', 'a rough guess from the number of steps — adjust it'), calc: T('سعر الساعة × الساعات + 15% هامش', 'rate × hours + 15% margin'), '': '' })[k] || '';
+  const m = MSA.modal({
+    title: T('الوضع المالي للمشروع', 'Project finances'), size: 'wide',
+    body: '<div id="fnBody"></div>',
+    buttons: [{ label: T('تخطي دلوقتي', 'Skip for now'), cls: 'ghost', onClick: a => { a.close(); } },
+      { label: T('تطبيق', 'Apply'), cls: 'primary', onClick: a => apply(a) }],
+    onClose: () => { done && done(); }
+  });
+  const body = $('#fnBody', m.el);
+  const sumPct = () => plan.reduce((a, x) => a + (+x[1] || 0), 0);
+  const draw = () => {
+    const curSel = '<select id="fnCur">' + MSA.rates.pricing([cur]).map(c => '<option ' + (c === cur ? 'selected' : '') + '>' + c + '</option>').join('') + '</select>';
+    let h = '<div class="hint" style="margin-bottom:10px" dir="auto">' + esc(T('المشروع ده هيتحاسب إزاي؟ اختار وأنا هقترحلك أرقام تبدأ بيها — وكلها تتعدّل.', 'How will this project be billed? Pick one and I will suggest starting numbers — all editable.')) + '</div>' +
+      '<div class="fin-opts"><button class="fin-opt' + (model === 'time' ? ' on' : '') + '" data-m="time">' + I('clock', 'lg') + '<b>' + esc(T('محسوب بوقت', 'Time-based')) + '</b><span>' + esc(T('بتحاسب بالساعة حسب الوقت اللي اشتغلته فعلًا (المؤقّت).', 'Billed per hour for the time you actually work (the timer).')) + '</span></button>' +
+      '<button class="fin-opt' + (model === 'milestone' ? ' on' : '') + '" data-m="milestone">' + I('flag', 'lg') + '<b>Milestone</b><span>' + esc(T('سعر ثابت للمشروع بيتقسّم على دفعات (عربون / مرحلة / تسليم).', 'A fixed price split into payments (deposit / milestone / delivery).')) + '</span></button></div>';
+    if (model === 'time') {
+      h += '<div class="st-grid"><div class="field"><label class="f">' + esc(T('العملة', 'Currency')) + '</label>' + curSel + '</div>' +
+        '<div class="field"><label class="f">' + esc(T('سعر الساعة', 'Hourly rate')) + '</label><input type="number" id="fnRate" min="0" value="' + (rate || '') + '" placeholder="' + esc(T('اكتب سعر ساعتك', 'Your hourly rate')) + '"></div>' +
+        '<div class="field"><label class="f">' + esc(T('الساعات المتوقعة', 'Estimated hours')) + '</label><input type="number" id="fnHrs" min="0" step="0.5" value="' + (hours || '') + '"></div></div>' +
+        '<div class="fin-note" dir="auto">' + esc(T('الساعات: ', 'Hours: ') + src(sg.hoursFrom) + (sg.hoursFrom === 'est' ? ' (' + sg.leaves + ' ' + T('خطوة', 'steps') + ')' : '') + (rate > 0 && sg.rateFrom ? ' · ' + T('السعر: ', 'Rate: ') + src(sg.rateFrom) : '')) + '</div>' +
+        '<div class="st-total"><span>' + esc(T('التقدير الأولي', 'Initial estimate')) + ': <b dir="ltr" id="fnTot">' + (rate > 0 && hours > 0 ? money(rate * hours) + ' ' + cur : '—') + '</b></span></div>';
+    } else if (model === 'milestone') {
+      const tot = fixed > 0 ? fixed : 0;
+      h += '<div class="st-grid"><div class="field"><label class="f">' + esc(T('العملة', 'Currency')) + '</label>' + curSel + '</div>' +
+        '<div class="field"><label class="f">' + esc(T('سعر المشروع الإجمالي', 'Total project price')) + '</label><input type="number" id="fnFixed" min="0" value="' + (fixed || '') + '" placeholder="' + esc(T('اكتب السعر المتفق عليه', 'The agreed price')) + '"></div></div>' +
+        (sg.fixedFrom ? '<div class="fin-note" dir="auto">' + esc(T('السعر: ', 'Price: ') + src(sg.fixedFrom)) + '</div>' : '<div class="fin-note" dir="auto">' + esc(T('مفيش مشاريع سابقة أقارن بيها — اكتب السعر المتفق عليه.', 'No earlier projects to compare with — enter the agreed price.')) + '</div>') +
+        '<div class="f" style="margin:12px 0 6px">' + esc(T('خطة الدفعات', 'Payment plan')) + ' <span class="hint">' + esc(T('(المجموع لازم 100%)', '(must total 100%)')) + '</span></div>' +
+        plan.map((x, i) => '<div class="row" style="margin-bottom:6px"><input type="text" dir="auto" class="grow" data-pl="' + i + '" value="' + esc(x[0]) + '"><input type="number" min="0" max="100" style="width:80px" data-pp="' + i + '" value="' + x[1] + '"><span>%</span><b dir="ltr" style="min-width:90px;text-align:end" data-pa2="' + i + '">' + (tot > 0 ? money(tot * x[1] / 100) + ' ' + cur : '') + '</b><button class="icon-btn sm danger" data-pd="' + i + '" aria-label="delete">' + I('x', 'sm') + '</button></div>').join('') +
+        '<div class="row"><button class="btn sm" data-padd>' + I('plus', 'sm') + esc(T('إضافة دفعة', 'Add a payment')) + '</button><span class="grow"></span><b id="fnSum" style="color:' + (Math.abs(sumPct() - 100) < .01 ? 'var(--ok,#2fa66d)' : '#e5484d') + '">' + sumPct() + '%</b></div>';
+    }
+    body.innerHTML = h; wire();
+  };
+  const wire = () => {
+    $$('[data-m]', body).forEach(b => b.onclick = () => { model = b.dataset.m; draw(); });
+    const c = $('#fnCur', body); if (c) c.onchange = e => { const from = cur, to = e.target.value, R = MSA.rates;
+      if (R.has(from) && R.has(to) && from !== to) { const cv = v => Math.round(R.convert(v, from, to) * 100) / 100; rate = cv(rate); fixed = cv(fixed); } cur = to; draw(); };
+    const r = $('#fnRate', body); if (r) r.oninput = e => { rate = num(e.target.value); upd(); };
+    const hh = $('#fnHrs', body); if (hh) hh.oninput = e => { hours = num(e.target.value); upd(); };
+    const f = $('#fnFixed', body); if (f) f.oninput = e => { fixed = num(e.target.value); upd(); };
+    $$('[data-pl]', body).forEach(i => i.oninput = e => { plan[+i.dataset.pl][0] = e.target.value; });
+    $$('[data-pp]', body).forEach(i => i.oninput = e => { plan[+i.dataset.pp][1] = num(e.target.value); upd(); });
+    $$('[data-pd]', body).forEach(b => b.onclick = () => { plan.splice(+b.dataset.pd, 1); draw(); });
+    const add = $('[data-padd]', body); if (add) add.onclick = () => { plan.push([T('دفعة', 'Payment'), Math.max(0, 100 - sumPct())]); draw(); };
+  };
+  const upd = () => {
+    const t = $('#fnTot', body); if (t) t.textContent = rate > 0 && hours > 0 ? money(rate * hours) + ' ' + cur : '—';
+    const s = $('#fnSum', body); if (s) { s.textContent = sumPct() + '%'; s.style.color = Math.abs(sumPct() - 100) < .01 ? 'var(--ok,#2fa66d)' : '#e5484d'; }
+    $$('[data-pa2]', body).forEach(b => { b.textContent = fixed > 0 ? money(fixed * plan[+b.dataset.pa2][1] / 100) + ' ' + cur : ''; });
+  };
+  const apply = a => {
+    if (!model) { MSA.toast(T('اختار محسوب بوقت أو Milestone الأول', 'Pick Time-based or Milestone first'), 'err'); return; }
+    if (model === 'milestone' && Math.abs(sumPct() - 100) > .01) { MSA.toast(T('مجموع الدفعات لازم يبقى 100%', 'The payments must total 100%'), 'err'); return; }
+    tm.model = model; tm.cur = cur;
+    if (model === 'time') { tm.rate = rate; tm.fixed = 0; tm.estHours = hours; if (p.pay) delete p.pay.plan; }
+    else { tm.fixed = fixed; tm.estHours = 0; payOf(p).plan = plan.filter(x => x[0] || x[1]).map(x => ({ id: U.uid('pl'), label: String(x[0] || '').trim() || T('دفعة', 'Payment'), pct: +x[1] || 0 })); }
+    MSA.save(); a.close();
+    MSA.toast(model === 'time' ? T('اتسجّل: محسوب بوقت', 'Saved: time-based') : T('اتسجّل: Milestone', 'Saved: milestone'), 'ok');
+  };
+  draw();
 };
 
 /* the money dashboard (view "money") */

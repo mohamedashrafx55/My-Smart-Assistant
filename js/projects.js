@@ -196,6 +196,7 @@ function newProject(){
         else pr.steps = P.makeSteps(pick);
         MSA.state.projects.unshift(pr); MSA.state.ui.project = pr.id; MSA.state.ui.ptab = 'plan'; MSA.state.ui.projView = 'map'; MSA.save(); MSA.updateCounts(); a.close(); if (cl && MSA.plus && MSA.plus.autoIdent) MSA.plus.autoIdent(pr);
         if (MSA.view !== 'active') MSA.go('active'); else MSA.rerender(false);
+        if (MSA.plus && MSA.plus.financeSetup) setTimeout(() => MSA.plus.financeSetup(pr, () => { MSA.rerender(true); }), 350);
       } }
     ],
     onMount: el => {
