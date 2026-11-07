@@ -135,17 +135,18 @@ function bind(host){
       MSA.ctx(rc.left, rc.bottom + 4, [
         { icon: 'pencil', label: t('rename'), onClick: async () => { const v = await MSA.ask({ title: t('rename'), value: P.title(r.step) }); if (v) { r.step.title = v; refresh(); } } },
         { icon: 'grid', label: MSA.T('البرامج المستخدمة', 'Programs used'), onClick: () => MSA.apps.pick(r.step, () => { MSA.save(); MSA.rerender(true); }) },
+        { icon: 'image', label: MSA.T('اختيار صورة غلاف الخلية…', 'Choose cell cover…'), onClick: () => MSA.cover.pickStep(p(), r.step, () => MSA.rerender(true)) },
         { icon: 'layers', label: MSA.T('فتح كمود بورد', 'Open as moodboard'), onClick: () => MSA.board.open(p(), r.step) },
         { icon: 'plus', label: t('addSubStep'), onClick: async () => { const v = await MSA.ask({ title: t('addSubStep'), placeholder: t('stepName') }); if (v) { r.step.children.push({ id: U.uid('s'), key: null, title: v, done: false, note: '', atts: [], children: [] }); r.step.done = false; refresh(); } } },
         { icon: 'chev-u', label: t('moveUp'), onClick: () => { if (r.index > 0) { const [x] = r.list.splice(r.index, 1); r.list.splice(r.index - 1, 0, x); refresh(); } } },
         { icon: 'chev-d', label: t('moveDown'), onClick: () => { if (r.index < r.list.length - 1) { const [x] = r.list.splice(r.index, 1); r.list.splice(r.index + 1, 0, x); refresh(); } } },
         '-',
-        { icon: 'trash', label: t('delete'), danger: true, onClick: async () => { if (await MSA.confirm(t('delStepQ', { n: P.title(r.step) }), { danger: true, okLabel: t('delete') })) { const atts = P.ownedAtts([r.step]); r.list.splice(r.index, 1); await MSA.files.delMany(atts); refresh(); } } }
+        { icon: 'trash', label: t('delete'), danger: true, onClick: async () => { if (await MSA.confirm(t('delStepQ', { n: P.title(r.step) }), { danger: true, okLabel: t('delete') })) { const atts = P.ownedAtts([r.step]).concat(MSA.cover.extraAll([r.step])); r.list.splice(r.index, 1); await MSA.files.delMany(atts); refresh(); } } }
       ]);
     },
     addstep: async () => { const v = await MSA.ask({ title: t('addStep'), placeholder: t('stepName') }); if (v) { p().steps.push({ id: U.uid('s'), key: null, title: v, done: false, note: '', atts: [], children: [] }); refresh(); } },
     rename: async () => { const v = await MSA.ask({ title: t('renameProject'), value: p().name }); if (v) { p().name = v; refresh(); } },
-    delproj: async () => { const pr = p(); if (await MSA.confirm(t('delProjQ', { n: pr.name }), { danger: true, okLabel: t('delete') })) { await MSA.files.delMany(P.ownedAtts(pr.steps)); MSA.state.projects = MSA.state.projects.filter(x => x.id !== pr.id); MSA.state.ui.project = null; refresh(); } },
+    delproj: async () => { const pr = p(); if (await MSA.confirm(t('delProjQ', { n: pr.name }), { danger: true, okLabel: t('delete') })) { await MSA.files.delMany(P.ownedAtts(pr.steps).concat(MSA.cover.extraAll(pr.steps), MSA.cover.extra(pr))); MSA.state.projects = MSA.state.projects.filter(x => x.id !== pr.id); MSA.state.ui.project = null; refresh(); } },
     complete: async () => {
       const pr = p(), g = P.progress(pr);
       const msg = g.pct < 100 ? t('completeQPartial', { n: pr.name, p: g.pct }) : t('completeQ', { n: pr.name });

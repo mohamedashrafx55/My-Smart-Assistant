@@ -186,7 +186,7 @@ function thumbOf(s){
   const atts = P.allAtts([s]); const kinds = {};
   atts.forEach(a => kinds[a.kind] = (kinds[a.kind] || 0) + 1);
   /* the cover is the most recently added picture, video or video link */
-  const last = [...atts].reverse().find(a => a.kind === 'image' || a.kind === 'video' || (a.kind === 'link' && (a.cover || a.thumb)));
+  const last = MSA.cover.step(s, atts) || [...atts].reverse().find(a => a.kind === 'image' || a.kind === 'video' || (a.kind === 'link' && (a.cover || a.thumb)));
   let inner;
   if (last && last.kind === 'image') inner = '<img data-thumb="' + last.id + '" alt="">';
   else if (last && last.kind === 'video') inner = '<video data-thumb="' + last.id + '" muted preload="metadata" playsinline></video>';
@@ -417,7 +417,7 @@ P.renderMap = function(box, p){
     else if (a === 'del' && r) {
       const many = r.step.children.length > 0;
       if (!await MSA.confirm(many ? t('map.delGroupQ', { n: P.title(r.step) }) : t('delStepQ', { n: P.title(r.step) }), { danger: true, okLabel: t('delete') })) return;
-      const atts = P.ownedAtts([r.step]); r.list.splice(r.index, 1); await MSA.files.delMany(atts);
+      const atts = P.ownedAtts([r.step]).concat(MSA.cover.extraAll([r.step])); r.list.splice(r.index, 1); await MSA.files.delMany(atts);
       esel = null; commit(); MSA.updateCounts && MSA.updateCounts(); MSA.rerender();
     }
     else if (a === 'edel' && esel_e >= 0) { p.graph.edges.splice(esel_e, 1); esel_e = -1; commit(); redo(); }

@@ -5,7 +5,7 @@ const t = (k, v) => MSA.t(k, v);
 
 const hue = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
 const grad = n => { const h = hue(n); return 'linear-gradient(135deg,hsl(' + h + ' 52% 40%),hsl(' + ((h + 48) % 360) + ' 58% 22%))'; };
-const firstImage = p => { let a = null; P.walk(p.steps, s => { if (!a) a = s.atts.find(x => x.kind === 'image'); }); return a; };
+const firstImage = p => { const cv = MSA.cover.proj(p); if (cv) return cv; let a = null; P.walk(p.steps, s => { if (!a) a = s.atts.find(x => x.kind === 'image'); }); return a; };
 const countKinds = p => { const k = { image: 0, video: 0, audio: 0, doc: 0 }; P.allAtts(p.steps).forEach(a => k[a.kind] = (k[a.kind] || 0) + 1); return k; };
 
 function stepDoneHTML(s){
@@ -67,13 +67,14 @@ function render(host){
       e.stopPropagation(); const p = MSA.state.projects.find(x => x.id === el.dataset.id), rc = el.getBoundingClientRect(); if (!p) return;
       MSA.ctx(rc.left, rc.bottom + 4, [
         { icon: 'play', label: t('present'), onClick: () => MSA.present(p) },
+        { icon: 'image', label: T2('تغيير غلاف المشروع…', 'Change project cover…'), onClick: () => MSA.cover.pickProj(p, () => MSA.rerender(true)) },
         { icon: 'user', label: T2('نقل إلى عميل…', 'Move to client…'), onClick: async () => { const v = await CL().pick(CL().of(p), T2('العميل', 'Client')); if (v == null) return; p.client = v; if (p.time) p.time.client = v; if (v) CL().ensure(v); MSA.save(); MSA.rerender(false); } }
       ]);
     }
   });
 }
 function hydrateCovers(root){
-  $$('[data-cover]', root).forEach(async el => { const u = await MSA.files.url(el.dataset.cover); if (u) el.style.backgroundImage = 'url("' + u + '")'; });
+  $$('[data-cover]', root).forEach(async el => { const u = await MSA.thumbs.url(el.dataset.cover); if (u) el.style.backgroundImage = 'url("' + u + '")'; });
 }
 
 function renderDetail(host, p){
@@ -83,7 +84,7 @@ function renderDetail(host, p){
     '<div class="page-head"><div class="row"><button class="btn sm" data-act="back">' + I('arrow-l', 'sm flip') + U.esc(t('back')) + '</button>' +
     '<div><h1 style="font-size:22px">' + U.esc(p.name) + '</h1><div class="sub">' + U.esc(t('completedOn', { d: MSA.fmtDate(p.completedAt) })) + ' · ' + U.esc(t('stepsDone', { a: pr.done, b: pr.total })) + '</div></div></div>' +
     '<div class="row"><button class="btn" data-act="client">' + I('user', 'sm') + '<span>' + U.esc(CL().of(p) || T2('تعيين عميل', 'Set client')) + '</span></button><button class="btn primary" data-act="present">' + I('presentation', 'sm') + U.esc(t('present')) + '</button>' +
-    '<button class="btn" data-act="reopen">' + I('undo', 'sm') + U.esc(t('reopen')) + '</button>' +
+    '<button class="btn" data-act="cover">' + I('image', 'sm') + '<span>' + U.esc(T2('غلاف المشروع', 'Project cover')) + '</span></button><button class="btn" data-act="reopen">' + I('undo', 'sm') + U.esc(t('reopen')) + '</button>' +
     '<button class="btn danger" data-act="del">' + I('trash', 'sm') + '</button></div></div>' +
     '<div class="row" style="margin-bottom:18px"><span class="chip">' + I('image', 'sm') + k.image + '</span><span class="chip">' + I('video', 'sm') + k.video + '</span><span class="chip">' + I('music', 'sm') + k.audio + '</span><span class="chip">' + I('doc', 'sm') + k.doc + '</span></div>' +
     (visual.length ? '<div class="media-wall" id="wall" style="margin-bottom:22px">' + visual.map(a => MSA.attHTML(a, false)).join('') + '</div>' : '') +
@@ -91,9 +92,10 @@ function renderDetail(host, p){
   MSA.on(host, {
     back: () => { MSA.state.ui.doneOpen = null; MSA.save(); MSA.rerender(false); },
     present: () => MSA.present(p),
+    cover: () => MSA.cover.pickProj(p, () => MSA.rerender(true)),
     client: async () => { const v = await CL().pick(CL().of(p), T2('العميل', 'Client')); if (v == null) return; p.client = v; if (p.time) p.time.client = v; if (v) CL().ensure(v); MSA.save(); MSA.rerender(false); },
     reopen: async () => { if (!await MSA.confirm(t('reopenQ', { n: p.name }))) return; p.status = 'active'; delete p.completedAt; MSA.state.ui.doneOpen = null; MSA.state.ui.project = p.id; MSA.save(); MSA.updateCounts(); MSA.go('active'); MSA.toast(t('reopened')); },
-    del: async () => { if (!await MSA.confirm(t('delProjQ', { n: p.name }), { danger: true, okLabel: t('delete') })) return; await MSA.files.delMany(P.ownedAtts(p.steps)); MSA.state.projects = MSA.state.projects.filter(x => x.id !== p.id); MSA.state.ui.doneOpen = null; MSA.save(); MSA.updateCounts(); MSA.rerender(false); }
+    del: async () => { if (!await MSA.confirm(t('delProjQ', { n: p.name }), { danger: true, okLabel: t('delete') })) return; await MSA.files.delMany(P.ownedAtts(p.steps).concat(MSA.cover.extraAll(p.steps), MSA.cover.extra(p))); MSA.state.projects = MSA.state.projects.filter(x => x.id !== p.id); MSA.state.ui.doneOpen = null; MSA.save(); MSA.updateCounts(); MSA.rerender(false); }
   });
   MSA.bindAtts(host, () => all);
 }
