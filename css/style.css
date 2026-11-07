@@ -1430,3 +1430,7 @@ html.bd-open body{overflow:hidden}
 .cvp-i.on{border-color:var(--accent)}
 .cvp-i.on i{display:grid}
 .cvp-i:hover{border-color:var(--accent)}
+/* Arabic: the cell's tools sit on the right, right after the title (English keeps the tools at the end) */
+[dir=rtl] .step-main>.step-title{flex:0 1 auto;min-width:0;max-width:100%}
+[dir=rtl] .step-main>.add-btns{margin-inline-start:4px;justify-content:flex-start}
+[dir=rtl] .md-b .step-main>.step-title{flex:1 1 100%}
