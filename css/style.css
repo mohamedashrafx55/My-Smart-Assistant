@@ -1493,3 +1493,10 @@ html.bd-open body{overflow:hidden}
 .gr-src{margin-top:12px}.gr-sr{display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line)}.gr-sr>span:first-child{flex:1}
 .gr-tips{margin:10px 0 0;padding-inline-start:18px;font-size:13px}
 @media(max-width:820px){.gr-pk,.gr-tiles{grid-template-columns:1fr}}
+/* internet status */
+.net-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.net-ic{display:inline-flex;width:30px;height:30px;border-radius:50%;align-items:center;justify-content:center}
+.net-ic svg{width:18px;height:18px}
+.net-online{color:#2fa66d;background:color-mix(in srgb,#2fa66d 16%,transparent)}
+.net-weak{color:#d98a12;background:color-mix(in srgb,#f0b43c 22%,transparent)}
+.net-offline,.net-check{color:#8a8a86;background:color-mix(in srgb,#8a8a86 16%,transparent)}
