@@ -151,6 +151,7 @@ function draw(h){
   }
   h.innerHTML = '<div class="page-head"><div><h1>' + esc(MSA.t('nav.reports')) + '</h1><p class="sub">' + esc(T('أرقامك ورسومك، وتفاصيل كل مشروع بصوره ولينكاته، كله في مكان واحد', 'Your numbers, charts and every project\'s details — all in one place')) + '</p></div>' +
     '<div class="rp-rng">' + rng.map(r => '<button class="btn sm' + (R.range === r[0] ? ' primary' : '') + '" data-rng="' + r[0] + '">' + esc(r[1]) + '</button>').join('') + '<button class="btn sm" data-act="pdf">' + I('download', 'sm') + 'PDF</button></div></div>' +
+    (MSA.growth ? MSA.growth.dash() : '') +
     '<div class="rp-kpis">' + kpi('trophy', nf(d.doneN), T('مشاريع مكتملة', 'Completed'), '#f0b43c') + kpi('briefcase', nf(d.active), T('قيد التنفيذ', 'In progress'), '#5b8def') +
     kpi('trend', nf(d.money), T('الدخل (ج.م)', 'Income (EGP)'), '#3ccf91') + kpi('clock', (d.mins / 60).toFixed(1), T('ساعات شغل', 'Hours'), '#9b6bff') + '</div>' +
     '<section class="rp-c rp-ins"><h3>' + I('bulb', 'sm') + esc(T('الخلاصة', 'Summary')) + '</h3><ul>' + insights(d).map(x => '<li dir="auto">' + esc(x) + '</li>').join('') + '</ul></section>' +
@@ -189,5 +190,5 @@ function wire(h){
   h.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('rp-bar')) { e.preventDefault(); e.target.dispatchEvent(new MouseEvent('click', { bubbles: true })); } });
 }
 
-MSA.views.reports = { render(h){ draw(h); if (!h._rw) { h._rw = 1; wire(h); } } };
+MSA.views.reports = { render(h){ draw(h); if (!h._rw) { h._rw = 1; wire(h); if (MSA.growth) MSA.growth.dashWire(h); } } };
 })();

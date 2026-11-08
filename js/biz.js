@@ -224,7 +224,9 @@ plus.outstanding = () => { const open = moneyRows().filter(r => r.rem > 0.005); 
 /* =====================================================================
    2) READY MESSAGES
    ===================================================================== */
-const KINDS = () => [['quote', T('عرض سعر', 'Quote')], ['follow', T('متابعة', 'Follow-up')], ['delivery', T('تسليم', 'Delivery')], ['pay', T('تذكير بالدفع', 'Payment reminder')]];
+const KINDS = () => [['quote', T('عرض سعر', 'Quote')], ['follow', T('متابعة', 'Follow-up')], ['delivery', T('تسليم', 'Delivery')], ['pay', T('تذكير بالدفع', 'Payment reminder')],
+  ['intro', T('تعريف بنفسي', 'Introduce myself')], ['quoteFollow', T('متابعة عرض سعر', 'Quote follow-up')], ['reactivate', T('إحياء عميل قديم', 'Re-engage old client')], ['feedback', T('رأي بعد التسليم', 'Post-delivery check-in')], ['referral', T('طلب ترشيح', 'Referral request')], ['testimonial', T('طلب شهادة', 'Testimonial request')]];
+const KIND_HINT = { intro: ['ابعتها لأي حد سأل عن شغلك أو تحب تعرّفه بخدماتك. أضف رابط أعمالك.', 'Send to anyone who asked about your work. Add your portfolio link.'], quoteFollow: ['بعد ما تبعت عرض السعر بيومين-3 ولو مفيش رد.', 'Send 2–3 days after the quote if there is no reply.'], reactivate: ['لعميل اشتغلت معاه زمان وانقطع التواصل.', 'For a past client you have not spoken to in a while.'], feedback: ['بعد التسليم بأسبوع تقريبًا.', 'About a week after delivery.'], referral: ['بعد التسليم بشهر تقريبًا لما العميل يكون راضي.', 'About a month after delivery, when the client is happy.'], testimonial: ['اطلب رأي بسيط تقدر تحطه في البورتفوليو.', 'Ask for a short quote you can use in your portfolio.'] };
 function msgText(kind, lang, v){
   const ar = lang === 'ar', hi = v.client ? v.client : (ar ? 'حضرتك' : 'there'), me = v.me ? '\n' + v.me : '';
   const proj = v.project ? (ar ? '«' + v.project + '»' : '“' + v.project + '”') : '';
@@ -237,6 +239,24 @@ function msgText(kind, lang, v){
   if (kind === 'delivery') return ar
     ? 'أهلاً ' + hi + ' 🎉\nتم الانتهاء من ' + (proj ? 'مشروع ' + proj : 'الشغل') + ' وجاهز للتسليم. الملفات النهائية: [ضع الرابط هنا]\n\nياريت تراجعها وتبلغني بأي ملاحظة. ' + (v.remaining ? 'وبعد الاستلام نقفل المتبقي (' + v.remaining + ').\n\n' : '\n') + 'شكرًا لثقتك، وسعيد بالتعامل معاك 🙏\n' + me
     : 'Hi ' + hi + ' 🎉\n' + (proj ? 'The project ' + proj : 'The work') + ' is finished and ready for delivery. Final files: [paste the link here]\n\nPlease review and tell me about any notes. ' + (v.remaining ? 'Once received, we can settle the remaining balance (' + v.remaining + ').\n\n' : '\n') + 'Thank you for your trust — a pleasure working with you 🙏\n' + me;
+  if (kind === 'intro') return ar
+    ? 'أهلاً ' + hi + ' 👋\nأنا ' + (v.me || 'محمد') + '، مصمم ومونتير. شكرًا إنك سألت عن شغلي!\nبقدّم تصميم هوية بصرية، سوشيال ميديا، وتحرير فيديو بجودة عالية وتسليم في الميعاد.\n\nدي نماذج من أعمالي: [ضع رابط الأعمال هنا]\n\nقولي إيه اللي محتاجه وميزانيتك التقريبية وميعاد التسليم المطلوب، وأرد عليك بعرض واضح في نفس اليوم 🙌\n' + me
+    : 'Hi ' + hi + ' 👋\nI am ' + (v.me || 'a designer & video editor') + '. Thanks for asking about my work!\nI offer brand identity, social media design and video editing — high quality, on time.\n\nHere are some samples: [paste your portfolio link here]\n\nTell me what you need, your rough budget and the deadline, and I will send a clear offer today 🙌\n' + me;
+  if (kind === 'quoteFollow') return ar
+    ? 'أهلاً ' + hi + ' 🌿\nبتابع معاك بخصوص عرض السعر اللي بعتهولك' + (proj ? ' لمشروع ' + proj : '') + '. شفته؟ لو عندك أي سؤال أو عايز نعدّل في الباقة أو الميزانية، أنا جاهز.\nلو حابب نبدأ، بس قولي وأحجزلك مكان في جدول الشغل 🗓️\n' + me
+    : 'Hi ' + hi + ' 🌿\nJust following up on the quote I sent' + (proj ? ' for ' + proj : '') + '. Did you get a chance to look at it? Happy to answer questions or adjust the package or budget.\nIf you would like to start, let me know and I will reserve a spot in my schedule 🗓️\n' + me;
+  if (kind === 'reactivate') return ar
+    ? 'أهلاً ' + hi + ' 👋\nوحشتني! بقالنا فترة من آخر شغل مع بعض' + (proj ? ' (' + proj + ')' : '') + '. أتمنى تكون كل حاجة تمام عندك.\nعندي مواعيد فاضية الفترة الجاية، ولو عندك أي مشروع جديد أو تحديث في اللي اتعمل قبل كده، يسعدني أساعدك — وهديلك أولوية 🙏\n' + me
+    : 'Hi ' + hi + ' 👋\nIt has been a while since we worked together' + (proj ? ' on ' + proj : '') + ' — I hope all is well!\nI have openings coming up, and if you have a new project or want to refresh what we made, I would be glad to help — with priority for you 🙏\n' + me;
+  if (kind === 'feedback') return ar
+    ? 'أهلاً ' + hi + ' 🌿\nعدّى أسبوع على تسليم ' + (proj ? 'مشروع ' + proj : 'الشغل') + ' وحبيت أطمّن إنه عاجبك ومستخدمه من غير أي مشكلة.\nرأيك يهمني جدًا — إيه أكتر حاجة عجبتك، وفي أي حاجة كنت تحب نحسّنها؟ وحاجة أخيرة: لو تسمح تكتبلي سطرين عن تجربتك أحطهم في معرض أعمالي 🙏\n' + me
+    : 'Hi ' + hi + ' 🌿\nIt has been a week since I delivered ' + (proj ? 'the project ' + proj : 'the work') + ' and I wanted to make sure you are happy with it and everything works.\nYour feedback matters — what did you like most, and is there anything you would improve? And if you do not mind, a couple of lines about your experience would mean a lot for my portfolio 🙏\n' + me;
+  if (kind === 'referral') return ar
+    ? 'أهلاً ' + hi + ' 🌿\nأتمنى الشغل' + (proj ? ' في ' + proj : '') + ' بيخدمك كويس. عندي طلب صغير: لو في حد من أصحابك أو زمايلك محتاج تصميم أو مونتاج، ممكن ترشّحه ليا؟\nوهكون ممتن جدًا، وهعمل لأي حد ترشحه اهتمام خاص — وليك خصم على شغلك الجاي 🎁\n' + me
+    : 'Hi ' + hi + ' 🌿\nI hope the work' + (proj ? ' on ' + proj : '') + ' is serving you well. A small favour: if you know a friend or colleague who needs design or video editing, could you recommend me?\nI would be very grateful, I will take great care of anyone you refer — and you get a discount on your next project 🎁\n' + me;
+  if (kind === 'testimonial') return ar
+    ? 'أهلاً ' + hi + ' 🌿\nيسعدني إن شغلنا' + (proj ? ' في ' + proj : '') + ' عجبك! ممكن تكتبلي رأي بسيط (من 2 لـ3 سطور) عن تجربتك معايا؟ زي: إيه المشكلة اللي كنت عايز تحلها، وإيه اللي اتغيّر بعد الشغل.\nهستخدمه في معرض أعمالي (وأقدر أكتب اسمك أو أخليه بدون اسم، زي ما تحب). شكرًا جدًا 🙏\n' + me
+    : 'Hi ' + hi + ' 🌿\nSo glad you liked our work' + (proj ? ' on ' + proj : '') + '! Could you write a short testimonial (2–3 lines) about working with me? For example: what you needed, and what changed after the work.\nI will use it in my portfolio (with your name or anonymous — your choice). Thank you so much 🙏\n' + me;
   return ar
     ? 'أهلاً ' + hi + '،\nتذكير ودّي بخصوص ' + (proj ? 'مشروع ' + proj : 'الحساب') + ': المتبقي ' + (v.remaining || '—') + (v.total ? ' من إجمالي ' + v.total : '') + (v.due ? '، وموعد الاستحقاق ' + v.due : '') + '.\nلو تم التحويل ياريت تبعتلي إيصال التحويل. شكرًا لتعاونك 🙏\n' + me
     : 'Hi ' + hi + ',\nA friendly reminder about ' + (proj ? 'the project ' + proj : 'your account') + ': the remaining balance is ' + (v.remaining || '—') + (v.total ? ' out of ' + v.total : '') + (v.due ? ', due on ' + v.due : '') + '.\nIf you have already transferred it, please send me the receipt. Thank you 🙏\n' + me;
@@ -249,7 +269,7 @@ function copyText(txt){
   return Promise.resolve(fb());
 }
 function clientRow(name){ const k = String(name || '').trim().toLowerCase(); return k ? MSA.clients.data().rows.find(r => String(r.c.name || '').trim().toLowerCase() === k) : null; }
-function markContact(name){ const r = clientRow(name) || (name && MSA.clients.ensure(name)); if (!r) return false; r.c.last = today(); delete r.fu; MSA.save(); return true; }
+function markContact(name){ if (!clientRow(name) && MSA.growth && MSA.growth.touch(name)) return true; const r = clientRow(name) || (name && MSA.clients.ensure(name)); if (!r) return false; r.c.last = today(); delete r.fu; MSA.save(); return true; }
 plus.markContact = markContact;
 
 plus.messages = function(o){
@@ -272,7 +292,7 @@ plus.messages = function(o){
       { label: T('تم التواصل اليوم', 'Mark as contacted'), cls: 'ghost', icon: 'check', onClick: () => { const n = $('#mgClient', m.el).value.trim(); if (!n) { MSA.toast(T('اكتب اسم العميل أولًا', 'Enter a client name first'), 'err'); return; } markContact(n); MSA.toast(T('تم تسجيل آخر تواصل: اليوم', 'Last contact recorded: today'), 'ok'); } },
       { label: T('نسخ', 'Copy'), icon: 'copy', onClick: async () => { const ok = await copyText($('#mgText', m.el).value); MSA.toast(ok ? T('تم النسخ — الصقه في واتساب', 'Copied — paste it into WhatsApp') : T('تعذر النسخ — حدد النص وانسخه يدويًا', 'Could not copy — select the text and copy it manually'), ok ? 'ok' : 'err'); } },
       { label: T('واتساب', 'WhatsApp'), cls: 'primary', icon: 'link', onClick: () => {
-        const n = $('#mgClient', m.el).value.trim(), r = clientRow(n), ph = waNum(r && (r.c.wa || r.c.phone)), txt = $('#mgText', m.el).value;
+        const n = $('#mgClient', m.el).value.trim(), r = clientRow(n), ph = waNum((r && (r.c.wa || r.c.phone)) || (MSA.growth && MSA.growth.phoneOf(n))), txt = $('#mgText', m.el).value;
         MSA.openLink('https://wa.me/' + ph + '?text=' + encodeURIComponent(txt));
         if (n) { markContact(n); MSA.toast(ph ? T('فتح واتساب — وتم تسجيل التواصل', 'Opening WhatsApp — contact recorded') : T('لا يوجد رقم للعميل — اختر جهة الاتصال داخل واتساب', 'No number saved for this client — pick the contact inside WhatsApp'), 'ok'); }
       } }
@@ -283,8 +303,8 @@ plus.messages = function(o){
       const gen = () => {
         $$('#mgKinds .pchip', el).forEach(b => b.classList.toggle('on', b.dataset.k === kind)); $$('#mgLang button', el).forEach(b => b.classList.toggle('on', b.dataset.l === lang));
         ta.value = msgText(kind, lang, vars());
-        const r = clientRow(client), hasPh = r && (r.c.wa || r.c.phone);
-        hint.textContent = (kind === 'quote' ? T('نزّل عرض السعر PDF من تبويب «الوقت والتسعير» وأرفقه مع الرسالة. ', 'Download the quote PDF from the Time & pricing tab and attach it. ') : '') + (hasPh ? T('سيُرسل إلى رقم العميل المحفوظ في الشيت.', 'It will go to the number saved in the clients sheet.') : T('لا يوجد رقم محفوظ للعميل — ستختار جهة الاتصال داخل واتساب.', 'No number saved for this client — you will pick the contact inside WhatsApp.'));
+        const r = clientRow(client), hasPh = (r && (r.c.wa || r.c.phone)) || (MSA.growth && MSA.growth.phoneOf(client));
+        hint.textContent = (KIND_HINT[kind] ? T(KIND_HINT[kind][0], KIND_HINT[kind][1]) + ' ' : '') + (kind === 'quote' ? T('نزّل عرض السعر PDF من تبويب «الوقت والتسعير» وأرفقه مع الرسالة. ', 'Download the quote PDF from the Time & pricing tab and attach it. ') : '') + (hasPh ? T('سيُرسل إلى رقم العميل المحفوظ في الشيت.', 'It will go to the number saved in the clients sheet.') : T('لا يوجد رقم محفوظ للعميل — ستختار جهة الاتصال داخل واتساب.', 'No number saved for this client — you will pick the contact inside WhatsApp.'));
       };
       fillProj(); gen();
       $('#mgKinds', el).onclick = e => { const b = e.target.closest('[data-k]'); if (b) { kind = b.dataset.k; gen(); } };
@@ -300,6 +320,7 @@ plus.messages = function(o){
    ===================================================================== */
 const followDays = () => { const v = parseInt(S().settings.followDays, 10); return v > 0 ? v : 14; };
 function mkTask(o){ return Object.assign({ id: U.uid('t'), type: 'task', title: '', desc: '', status: 'todo', priority: 'normal', start: '', due: '', remind: '', remindAt: '', repeat: '', tags: [], checklist: [], atts: [], color: '', pinned: false, created: Date.now(), updated: Date.now(), notified: false }, o); }
+plus.mkTask = mkTask;
 plus.checkFollow = function(){
   if (S().settings.followOn === false || !MSA.clients) return 0;
   const d = MSA.clients.data(), t0 = dateMs(today()); let made = 0;

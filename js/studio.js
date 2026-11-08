@@ -127,7 +127,7 @@ function tTime(p, box){
       '<div class="field"><label class="f">' + esc(T('شروط وملاحظات (تظهر في الملف)', 'Terms & notes (shown on the document)')) + '</label><textarea id="prNotes" dir="auto" rows="2">' + esc(tm.notes) + '</textarea></div>' +
       '<div class="st-total"><span>' + esc(T('الساعات', 'Hours')) + ': <b>' + hrs().toFixed(2) + '</b></span><span>' + esc(T('الإجمالي', 'Total')) + ': <b dir="ltr" id="prTotal">' + money(total()) + ' ' + tm.cur + '</b></span></div>' +
       '<div class="fxnote" id="prFx"></div>' +
-      '<div class="row" style="margin-top:12px"><button class="btn primary" data-a="quote">' + I('download', 'sm') + esc(T('عرض سعر', 'Quote')) + '</button><button class="btn" data-a="invoice">' + I('download', 'sm') + esc(T('فاتورة', 'Invoice')) + '</button></div></div><div id="payHost"></div>';
+      '<div class="row" style="margin-top:12px"><button class="btn primary" data-a="quote">' + I('download', 'sm') + esc(T('عرض سعر', 'Quote')) + '</button><button class="btn" data-a="pkg">' + I('layers', 'sm') + esc(T('عرض بـ3 باقات', '3-package quote')) + '</button><button class="btn" data-a="invoice">' + I('download', 'sm') + esc(T('فاتورة', 'Invoice')) + '</button></div></div><div id="payHost"></div>';
     wire();
     if (MSA.plus && MSA.plus.payCard) MSA.plus.payCard(p, $('#payHost', box));
   };
@@ -166,6 +166,7 @@ function tTime(p, box){
     };
     $('#prNotes', box).oninput = e => { tm.notes = e.target.value; sv(); };
     $('[data-a=quote]', box).onclick = () => priceDoc(p, 'quote');
+    $('[data-a=pkg]', box).onclick = () => MSA.growth && MSA.growth.pkgModal(p);
     $('[data-a=invoice]', box).onclick = () => priceDoc(p, 'invoice');
   };
   draw();
@@ -189,7 +190,24 @@ function priceDoc(p, kind){
     (tm.notes ? '<h2>' + esc(T('شروط وملاحظات', 'Terms & notes')) + '</h2><div style="white-space:pre-wrap">' + esc(tm.notes) + '</div>' : '') +
     (kind === 'quote' ? '<p class="muted">' + esc(T('هذا العرض ساري لمدة 14 يومًا من تاريخه.', 'This quotation is valid for 14 days from its date.')) + '</p>' : '') + '</div>';
   MSA.pdf.flow(kind + '-' + slug(p.name) + '-' + tm.seq + '.pdf', body, { css: cssOf(shell('', '', { accent: acc })), dir: en() ? 'ltr' : 'rtl' });
+  if (kind === 'quote' && MSA.growth) MSA.growth.quoteReminder(p, 3);
 }
+/* quote with 3 packages (basic / standard / complete) */
+MSA.pkgDoc = function(p, K){
+  const tm = p.time, prof = S().profile, acc = (idOf(p).colors[0]) || '#5b8def'; tm.seq = (tm.seq || 0) + 1; MSA.save();
+  const no = 'Q-' + today().replace(/-/g, '') + '-' + tm.seq;
+  const card = (x) => '<td style="vertical-align:top;width:33.3%;padding:14px;border:' + (x.star ? '2px solid ' + acc : '1px solid #e5e5e2') + ';border-radius:12px;background:' + (x.star ? '#f6f9ff' : '#fff') + '">' +
+    (x.star ? '<div style="font-size:11px;font-weight:700;color:' + acc + '">' + esc(T('الأكثر طلبًا', 'MOST POPULAR')) + '</div>' : '<div style="font-size:11px">&nbsp;</div>') +
+    '<div style="font-size:17px;font-weight:700" dir="auto">' + esc(x.name) + '</div><div style="font-size:26px;font-weight:800;color:' + acc + ';margin:6px 0" dir="ltr">' + money(num(x.price)) + ' <span style="font-size:13px">' + esc(tm.cur) + '</span></div>' +
+    '<ul style="margin:8px 0;padding-inline-start:18px;font-size:13.5px">' + String(x.items || '').split('\n').map(l => l.trim()).filter(Boolean).map(l => '<li dir="auto">' + esc(l) + '</li>').join('') + '</ul>' +
+    '<div class="muted">' + (x.rev != null && x.rev !== '' ? esc(T('تعديلات: ', 'Revisions: ')) + x.rev : '') + (x.days ? ' · ' + esc(T('التسليم: ', 'Delivery: ')) + x.days + ' ' + esc(T('يوم', 'days')) : '') + '</div></td>';
+  const body = '<div class="pg"><div class="hd"><div><h1 style="color:' + acc + '">' + esc(T('عرض سعر — اختار الباقة المناسبة', 'Quotation — choose your package')) + '</h1><div class="muted" dir="ltr">' + no + ' · ' + today() + '</div></div><div style="text-align:end"><b>' + esc(prof.name || '') + '</b><br><span class="muted">' + esc(prof.title || '') + '</span></div></div>' +
+    '<div class="box"><b>' + esc(T('العميل', 'Client')) + ':</b> ' + esc(tm.client || '—') + '<br><b>' + esc(T('المشروع', 'Project')) + ':</b> ' + esc(p.name) + '</div>' +
+    '<table style="border-collapse:separate;border-spacing:10px 0;table-layout:fixed"><tbody><tr>' + K.list.map(card).join('') + '</tr></tbody></table>' +
+    (tm.notes ? '<h2>' + esc(T('شروط وملاحظات', 'Terms & notes')) + '</h2><div style="white-space:pre-wrap">' + esc(tm.notes) + '</div>' : '') +
+    '<p class="muted">' + esc(T('هذا العرض ساري لمدة 14 يومًا من تاريخه.', 'This quotation is valid for 14 days from its date.')) + '</p></div>';
+  MSA.pdf.flow('quote-packages-' + slug(p.name) + '-' + tm.seq + '.pdf', body, { css: cssOf(shell('', '', { accent: acc })), dir: en() ? 'ltr' : 'rtl' });
+};
 
 /* ---------- publishing calendar ---------- */
 const PLATS = ['Instagram', 'Facebook', 'TikTok', 'LinkedIn', 'X', 'YouTube', 'Behance', T('أخرى', 'Other')];

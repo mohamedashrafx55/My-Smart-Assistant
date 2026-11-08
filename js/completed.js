@@ -32,7 +32,7 @@ function folders(list){
   list.forEach(p => { const n = CL().of(p), key = n ? n.toLowerCase() : NONE; if (!map.has(key)) map.set(key, { key, name: n, ps: [] }); map.get(key).ps.push(p); });
   return [...map.values()].sort((a, b) => (a.key === NONE) - (b.key === NONE) || Math.max(...b.ps.map(p => p.completedAt || 0)) - Math.max(...a.ps.map(p => p.completedAt || 0)));
 }
-function tabsHTML(){ return '<div class="row cs-tabs"><button class="btn sm primary" disabled>' + I('trophy', 'sm') + '<span>' + U.esc(T2('المشاريع المكتملة', 'Completed projects')) + '</span></button><button class="btn sm" data-act="clients">' + I('user', 'sm') + '<span>' + U.esc(T2('شيت العملاء', 'Clients sheet')) + '</span></button></div>'; }
+function tabsHTML(){ return '<div class="row cs-tabs"><button class="btn sm primary" disabled>' + I('trophy', 'sm') + '<span>' + U.esc(T2('المشاريع المكتملة', 'Completed projects')) + '</span></button><button class="btn sm" data-act="clients">' + I('user', 'sm') + '<span>' + U.esc(T2('شيت العملاء', 'Clients sheet')) + '</span></button><button class="btn sm" data-act="leads">' + I('flag', 'sm') + '<span>' + U.esc(T2('العملاء المحتملين', 'Leads')) + '</span></button><button class="btn sm" data-act="portfolio">' + I('image', 'sm') + '<span>' + U.esc(T2('بورتفوليو جاهز', 'Portfolio')) + '</span></button></div>'; }
 
 function render(host){
   const open = MSA.state.projects.find(p => p.id === MSA.state.ui.doneOpen && p.status === 'done');
@@ -61,6 +61,8 @@ function render(host){
     up: go(() => { ui.doneClient = null; }),
     dview: go(el => { ui.doneView = el.dataset.v; }),
     clients: () => MSA.go('clients'),
+    leads: () => MSA.go('leads'),
+    portfolio: () => MSA.growth && MSA.growth.portfolio(),
     fsheet: () => { const n = cur && cur.name; if (n) { CL().ensure(n); const d = CL().data(); d.q = n; d.stat = ''; MSA.save(); } MSA.go('clients'); },
     frename: async () => { const v = await CL().pick(cur.name, T2('تغيير اسم العميل', 'Rename client')); if (v && v !== cur.name) { CL().rename(cur.name, v); ui.doneClient = v; MSA.save(); MSA.rerender(false); } },
     pmenu: (el, e) => {
@@ -84,7 +86,7 @@ function renderDetail(host, p){
     '<div class="page-head"><div class="row"><button class="btn sm" data-act="back">' + I('arrow-l', 'sm flip') + U.esc(t('back')) + '</button>' +
     '<div><h1 style="font-size:22px">' + U.esc(p.name) + '</h1><div class="sub">' + U.esc(t('completedOn', { d: MSA.fmtDate(p.completedAt) })) + ' · ' + U.esc(t('stepsDone', { a: pr.done, b: pr.total })) + '</div></div></div>' +
     '<div class="row"><button class="btn" data-act="client">' + I('user', 'sm') + '<span>' + U.esc(CL().of(p) || T2('تعيين عميل', 'Set client')) + '</span></button><button class="btn primary" data-act="present">' + I('presentation', 'sm') + U.esc(t('present')) + '</button>' +
-    '<button class="btn" data-act="cover">' + I('image', 'sm') + '<span>' + U.esc(T2('غلاف المشروع', 'Project cover')) + '</span></button><button class="btn" data-act="reopen">' + I('undo', 'sm') + U.esc(t('reopen')) + '</button>' +
+    '<button class="btn" data-act="cover">' + I('image', 'sm') + '<span>' + U.esc(T2('غلاف المشروع', 'Project cover')) + '</span></button><button class="btn" data-act="story">' + I('note', 'sm') + '<span>' + U.esc(T2('قصة للبورتفوليو', 'Portfolio story')) + '</span></button><button class="btn" data-act="after">' + I('bell', 'sm') + '<span>' + U.esc(T2('المتابعة بعد التسليم', 'After-delivery follow-up')) + '</span></button><button class="btn" data-act="reopen">' + I('undo', 'sm') + U.esc(t('reopen')) + '</button>' +
     '<button class="btn danger" data-act="del">' + I('trash', 'sm') + '</button></div></div>' +
     '<div class="row" style="margin-bottom:18px"><span class="chip">' + I('image', 'sm') + k.image + '</span><span class="chip">' + I('video', 'sm') + k.video + '</span><span class="chip">' + I('music', 'sm') + k.audio + '</span><span class="chip">' + I('doc', 'sm') + k.doc + '</span></div>' +
     (visual.length ? '<div class="media-wall" id="wall" style="margin-bottom:22px">' + visual.map(a => MSA.attHTML(a, false)).join('') + '</div>' : '') +
@@ -93,6 +95,8 @@ function renderDetail(host, p){
     back: () => { MSA.state.ui.doneOpen = null; MSA.save(); MSA.rerender(false); },
     present: () => MSA.present(p),
     cover: () => MSA.cover.pickProj(p, () => MSA.rerender(true)),
+    story: () => MSA.growth && MSA.growth.storyModal(p),
+    after: () => MSA.growth && MSA.growth.afterModal(p),
     client: async () => { const v = await CL().pick(CL().of(p), T2('العميل', 'Client')); if (v == null) return; p.client = v; if (p.time) p.time.client = v; if (v) CL().ensure(v); MSA.save(); MSA.rerender(false); },
     reopen: async () => { if (!await MSA.confirm(t('reopenQ', { n: p.name }))) return; p.status = 'active'; delete p.completedAt; MSA.state.ui.doneOpen = null; MSA.state.ui.project = p.id; MSA.save(); MSA.updateCounts(); MSA.go('active'); MSA.toast(t('reopened')); },
     del: async () => { if (!await MSA.confirm(t('delProjQ', { n: p.name }), { danger: true, okLabel: t('delete') })) return; await MSA.files.delMany(P.ownedAtts(p.steps).concat(MSA.cover.extraAll(p.steps), MSA.cover.extra(p))); MSA.state.projects = MSA.state.projects.filter(x => x.id !== p.id); MSA.state.ui.doneOpen = null; MSA.save(); MSA.updateCounts(); MSA.rerender(false); }

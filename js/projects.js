@@ -168,7 +168,7 @@ function bind(host){
 }
 P.walkFind = function(list, attId){ let hit = null; P.walk(list, s => { if (!hit && s.atts.some(a => a.id === attId)) hit = s; }); return hit; };
 
-function newProject(){
+function newProject(pre){
   const TP = MSA.tpl, mine = MSA.state.templates || [];
   const items = [
     { id: 'campaign', cat: 'id', icon: 'list', name: t('tpl.campaign'), desc: t('tpl.campaignHint'), n: P.makeSteps('campaign').flatMap(P.leaves).length },
@@ -181,7 +181,7 @@ function newProject(){
   const m = MSA.modal({
     title: t('newProject'), size: 'wide',
     body: '<div class="field"><label class="f">' + U.esc(t('projectName')) + '</label><input id="npName" type="text" placeholder="' + U.esc(t('projectNamePh')) + '"></div>' +
-      '<div class="field"><label class="f">' + U.esc(MSA.T('العميل (اختياري)', 'Client (optional)')) + '</label><input id="npClient" type="text" dir="auto" list="npCl" autocomplete="off" placeholder="' + U.esc(MSA.T('اختر عميلًا أو اكتب اسمًا جديدًا', 'Pick a client or type a new name')) + '"><datalist id="npCl">' + MSA.clients.names().map(n => '<option value="' + U.esc(n) + '">').join('') + '</datalist></div>' +
+      '<div class="field"><label class="f">' + U.esc(MSA.T('العميل (اختياري)', 'Client (optional)')) + '</label><input id="npClient" type="text" dir="auto" list="npCl" autocomplete="off" value="' + U.esc((pre && pre.client) || '') + '" placeholder="' + U.esc(MSA.T('اختر عميلًا أو اكتب اسمًا جديدًا', 'Pick a client or type a new name')) + '"><datalist id="npCl">' + MSA.clients.names().map(n => '<option value="' + U.esc(n) + '">').join('') + '</datalist></div>' +
       '<div class="field" style="margin:0"><label class="f">' + U.esc(MSA.T('نوع المشروع — لكل نوع خريطة مراحل مناسبة له', 'Project type — each one comes with its own logical stage map')) + '</label>' +
       '<div class="row" style="gap:8px;margin-bottom:8px"><input type="search" id="npQ" class="grow" placeholder="' + U.esc(MSA.T('ابحث: لوجو، منيو، ريلز…', 'Search: logo, menu, reel…')) + '"></div>' +
       '<div class="tabs-scroll" id="npCats">' + cats.map((c, i) => '<button class="pchip' + (i ? '' : ' on') + '" data-c="' + c[0] + '">' + U.esc(c[1]) + '</button>').join('') + '</div>' +

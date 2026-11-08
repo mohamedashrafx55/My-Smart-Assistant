@@ -37,7 +37,7 @@ function workValue(p){
   return MSA.rates && MSA.rates.has(tm.cur || 'EGP') ? MSA.rates.toEGP(v, tm.cur || 'EGP') : v;
 }
 const clients = MSA.clients = {
-  data: D, of: clientOf, projectsOf,
+  data: D, of: clientOf, projectsOf, SRC,
   names(){ const set = new Map(); D().rows.forEach(r => { const n = (r.c.name || '').trim(); if (n) set.set(norm(n), n); }); S().projects.forEach(p => { const n = clientOf(p); if (n && !set.has(norm(n))) set.set(norm(n), n); }); return [...set.values()].sort((a, b) => a.localeCompare(b, en() ? 'en' : 'ar')); },
   /* add a client row when a project mentions a new name */
   ensure(name, extra){
@@ -106,7 +106,7 @@ function render(host){
   host.innerHTML = '<div class="cs">' +
     '<div class="cs-band"><div class="cs-brand"><span class="cs-logo"><img src="assets/img-0fb45762.png" alt=""></span><div><h1>' + esc(T('قاعدة بيانات العملاء', 'Client database')) + '</h1><div class="cs-sub" dir="auto">' + esc(prof.name || '') + (prof.title ? ' · ' + esc(prof.title) : '') + '</div></div></div>' +
       '<div class="cs-kpis"><div><b>' + d.rows.length + '</b><span>' + esc(T('عميل', 'Clients')) + '</span></div><div><b>' + d.rows.filter(r => norm(r.c.status) === norm(T('نشط', 'Active')) || norm(r.c.status) === 'active' || norm(r.c.status) === 'نشط').length + '</b><span>' + esc(T('نشط', 'Active')) + '</span></div><div><b dir="ltr">' + money(totalVal) + '</b><span>' + esc(T('قيمة الشغل (جنيه)', 'Work value (EGP)')) + '</span></div></div></div>' +
-    '<div class="row cs-tabs"><button class="btn sm" data-ca="projects">' + I('trophy', 'sm') + '<span>' + esc(T('المشاريع المكتملة', 'Completed projects')) + '</span></button><button class="btn sm primary" disabled>' + I('user', 'sm') + '<span>' + esc(T('العملاء', 'Clients')) + '</span></button></div>' +
+    '<div class="row cs-tabs"><button class="btn sm" data-ca="projects">' + I('trophy', 'sm') + '<span>' + esc(T('المشاريع المكتملة', 'Completed projects')) + '</span></button><button class="btn sm primary" disabled>' + I('user', 'sm') + '<span>' + esc(T('العملاء', 'Clients')) + '</span></button><button class="btn sm" data-ca="leads">' + I('flag', 'sm') + '<span>' + esc(T('العملاء المحتملين', 'Leads')) + '</span></button></div>' +
     '<div class="cs-bar"><div class="cs-search">' + I('search', 'sm') + '<input type="search" id="csQ" dir="auto" value="' + esc(d.q) + '" placeholder="' + esc(T('ابحث في كل الأعمدة…', 'Search every column…')) + '"></div>' +
       '<div class="pchips"><button class="pchip' + (d.stat ? '' : ' on') + '" data-ca="stat" data-v="">' + esc(T('الكل', 'All')) + '</button>' + statuses.map(s => '<button class="pchip' + (norm(d.stat) === norm(s) ? ' on' : '') + '" data-ca="stat" data-v="' + esc(s) + '" style="--pc:' + pillColor(s) + '">' + esc(s) + '</button>').join('') + '</div>' +
       '<span class="grow"></span><button class="btn sm primary" data-ca="addrow">' + I('plus', 'sm') + '<span>' + esc(T('عميل جديد', 'New client')) + '</span></button><button class="btn sm" data-ca="addcol">' + I('plus', 'sm') + '<span>' + esc(T('عمود', 'Column')) + '</span></button>' +
@@ -166,6 +166,7 @@ function wire(host){
   root.addEventListener('click', async e => {
     const b = e.target.closest('[data-ca]'); if (!b) return; const a = b.dataset.ca, v = b.dataset.v;
     if (a === 'projects') { S().ui.doneClient = null; MSA.go('done'); }
+    else if (a === 'leads') MSA.go('leads');
     else if (a === 'stat') { d.stat = v; MSA.save(); redo(); }
     else if (a === 'addrow') { const r = { id: U.uid('cl'), ts: Date.now(), c: { status: T('محتمل', 'Prospect'), since: U.dateKey(new Date()) } }; d.rows.push(r); d.q = ''; d.stat = ''; if (d.sort) d.sort = null; MSA.save(); redo(); const el = $('[data-r="' + r.id + '"][data-c="name"]', host); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }
     else if (a === 'delrow') { const r = rowOf(v); if (!r) return; if (!await MSA.confirm(T('حذف العميل «' + (r.c.name || '') + '» من الشيت؟ (مشاريعه لا تُحذف)', 'Delete “' + (r.c.name || '') + '” from the sheet? (their projects stay)'), { danger: true, okLabel: T('حذف', 'Delete') })) return; if (r.ident && r.ident.logos) MSA.files.delMany(r.ident.logos); d.rows = d.rows.filter(x => x.id !== v); MSA.save(); redo(); }
