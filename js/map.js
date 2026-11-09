@@ -98,6 +98,7 @@ function graphOf(p){
   g.dim = g.dim || {}; g.col = g.col || {};
   Object.keys(g.pos).forEach(id => { if (!ids.has(id)) { delete g.pos[id]; delete g.dim[id]; delete g.col[id]; dirty = true; } });
   const ne = g.edges.filter(e => ids.has(e[0]) && ids.has(e[1]) && e[0] !== e[1]); if (ne.length !== g.edges.length) { g.edges = ne; dirty = true; }
+  if (MSA.cell && MSA.cell.prune(p, g)) dirty = true;
   all.forEach(s => {
     if (g.pos[s.id]) return;
     if (isFrame(s)) return;
@@ -124,7 +125,7 @@ function layout(p){
     if (isFrame(s)) { const b = frameBox(g, s); if (b) frames[s.id] = { s, ...b, kids: s.children.map(c => c.id) }; else { nodes[s.id] = { s, x: g.pos[s.id] ? g.pos[s.id][0] : PAD, y: g.pos[s.id] ? g.pos[s.id][1] : PAD, w: W, h: H }; } }
     else if (g.pos[s.id]) { const d = dimOf(g, s.id); nodes[s.id] = { s, x: g.pos[s.id][0], y: g.pos[s.id][1], w: d[0], h: d[1] }; }
   });
-  const rs = [...Object.values(nodes).map(n => [n.x + n.w, n.y + n.h]), ...Object.values(frames).map(f => [f.x + f.w, f.y + f.h])];
+  const rs = [...(MSA.cell ? MSA.cell.bounds(p) : []), ...Object.values(nodes).map(n => [n.x + n.w, n.y + n.h]), ...Object.values(frames).map(f => [f.x + f.w, f.y + f.h])];
   return { g, nodes, frames, E: g.edges, w: Math.max(600, ...rs.map(r => r[0])) + PAD, h: Math.max(400, ...rs.map(r => r[1])) + PAD };
 }
 function rect(L, id){ const f = L.frames[id]; if (f) return f; const n = L.nodes[id]; return n ? { x: n.x, y: n.y, w: n.w, h: n.h } : null; }
@@ -202,7 +203,7 @@ function nodeHTML(L, id, n, ready){
   const dn = lv.filter(x => x.done).length;
   const st = done ? '<span class="mn-st ok">' + I('check', 'sm') + '</span>' : (kid ? '<span class="mn-st cnt">' + dn + '/' + lv.length + '</span>' : '<span class="mn-st"></span>');
   return '<div class="mnode' + (done ? ' done' : '') + (part ? ' part' : '') + (ready && !done ? ' ready' : '') + (sel === s.id ? ' sel' : '') + (editing && esel === s.id ? ' esel' : '') + (L.g.col[s.id] ? ' cc' : '') + '" data-node="' + s.id + '" style="left:' + n.x + 'px;top:' + n.y + 'px;width:' + n.w + 'px;height:' + n.h + 'px' + (L.g.col[s.id] ? ';--nc:' + L.g.col[s.id] : '') + '">' +
-    PORTS + (editing ? '<i class="rz" data-rz title="' + U.esc(t('map.resize')) + '"></i>' : '') + '<div class="mn-top">' + st + '<span class="mn-t" dir="auto">' + U.esc(P.title(s)) + '</span></div>' + thumbOf(s) + (s.apps && s.apps.length ? '<div class="mn-apps">' + MSA.apps.chips(s, 20) + '</div>' : '') + (MSA.plus && MSA.plus.dueChip ? MSA.plus.dueChip(s, 'mn-due') : '') + '</div>';
+    PORTS + (editing ? '<i class="rz" data-rz title="' + U.esc(t('map.resize')) + '"></i>' : '') + '<div class="mn-top">' + st + '<span class="mn-t" dir="auto">' + U.esc(P.title(s)) + '</span></div>' + thumbOf(s) + (MSA.cell ? MSA.cell.badge(s) : '') + (s.apps && s.apps.length ? '<div class="mn-apps">' + MSA.apps.chips(s, 20) + '</div>' : '') + (MSA.plus && MSA.plus.dueChip ? MSA.plus.dueChip(s, 'mn-due') : '') + '</div>';
 }
 function frameHTML(f){
   const gs = f.s, lv = P.leaves(gs), dn = lv.filter(x => x.done).length;
@@ -243,6 +244,7 @@ function build(p){
   let h = '<div class="mapbox' + (editing ? ' edit' : '') + '" id="mapBox"><div class="mapworld" id="mapWorld" style="width:' + L.w + 'px;height:' + L.h + 'px">' + edgesSVG(L);
   Object.values(L.frames).forEach(f => { f.col = L.g.col[f.s.id]; h += frameHTML(f); });
   Object.keys(L.nodes).forEach(id => { h += nodeHTML(L, id, L.nodes[id], ready.has(id)); });
+  if (MSA.cell) h += MSA.cell.cardsHTML(p, L, editing);
   h += '<div id="metoolHost">' + toolHTML(L) + '</div></div>' +
     '<div class="maplegend"><span><i class="lgd ok"></i>' + U.esc(t('map.done')) + '</span><span><i class="lgd nx"></i>' + U.esc(t('map.nextUp')) + '</span><span><i class="lgd"></i>' + U.esc(t('map.todo')) + '</span></div>' +
     '<div class="mapctl"><button class="icon-btn" data-m="in" title="' + U.esc(t('map.zin')) + '">' + I('plus', 'sm') + '</button><button class="icon-btn" data-m="out" title="' + U.esc(t('map.zout')) + '">' + I('minus', 'sm') + '</button>' +
@@ -274,13 +276,18 @@ P.renderMap = function(box, p){
   const redo = () => { P.renderMap(box, p); };      /* structural change: rebuild the map, keep the view */
   const commit = () => MSA.save();
 
-  /* detail panel: the same step editor as the list view (checkbox, add buttons, note, files) */
+  const cellCtx = { p, el, world, det, toWorld, redo, commit, showDet: () => showDet(), sel: () => sel, editing: () => editing, dims, view: () => view,
+    open: id => { sel = id; showDet(); const r = rect(L, id); if (r) focus(id, Math.max(view.k, .85)); },
+    refreshTabs: () => { const tb = det.querySelector('.cel-tabs'), r = sel && P.find(p.steps, sel); if (tb && r) tb.outerHTML = MSA.cell.tabBar(r.step); },
+    refreshBadge: step => { cellCtx.refreshTabs(); const n = world.querySelector('.mnode[data-node="' + step.id + '"]'); if (n) { const o = n.querySelector('.mn-todo'); if (o) o.remove(); const b = MSA.cell.badge(step); if (b) n.insertAdjacentHTML('beforeend', b); } } };
+  /* detail panel: tabs (properties / to-do / Word); the properties tab is the same step editor as the list view */
   const showDet = () => {
     const r = sel && P.find(p.steps, sel);
     if (!r || editing) { det.hidden = true; if (!r) sel = null; return; }
     det.hidden = false;
-    det.innerHTML = '<div class="md-h"><b dir="auto">' + U.esc(P.title(r.step)) + '</b><button class="icon-btn" data-m="close" aria-label="' + U.esc(t('map.close')) + '">' + I('x', 'sm') + '</button></div><div class="md-b">' + P.stepHTML(r.step, 0) + '</div>';
-    MSA.hydrateAtts(det); MSA.apps.hydrate(det);
+    det.innerHTML = '<div class="md-h"><b dir="auto">' + U.esc(P.title(r.step)) + '</b><button class="icon-btn" data-m="close" aria-label="' + U.esc(t('map.close')) + '">' + I('x', 'sm') + '</button></div>' + (MSA.cell ? MSA.cell.tabBar(r.step) : '') + '<div class="md-b"></div>';
+    const mdb = det.querySelector('.md-b');
+    if (MSA.cell) MSA.cell.fill(mdb, r.step, cellCtx); else { mdb.innerHTML = P.stepHTML(r.step, 0); MSA.hydrateAtts(det); MSA.apps.hydrate(det); }
     box.querySelectorAll('[data-node]').forEach(n => n.classList.toggle('sel', n.dataset.node === sel));
   };
   showDet();
@@ -427,6 +434,7 @@ P.renderMap = function(box, p){
   el.addEventListener('input', e => { const ci = e.target.closest('[data-cc]'); if (!ci || !esel) return; p.graph.col[esel] = ci.value; const n = world.querySelector('[data-node="' + esel + '"]'); if (n) { n.style.setProperty('--nc', ci.value); n.classList.add('cc'); } });
   el.addEventListener('change', e => { if (e.target.closest('[data-cc]')) commit(); });
   el.addEventListener('click', async e => {
+    if (e.target.closest('.mcard') || !e.target.isConnected) { moved = false; return; }
     const ma = e.target.closest('[data-ma]'); if (ma && el.contains(ma)) { await act(ma.dataset.ma, ma); return; }
     const m = e.target.closest('[data-m]');
     if (m && el.contains(m)) {
@@ -436,7 +444,7 @@ P.renderMap = function(box, p){
       else if (a === 'close') { sel = null; showDet(); }
       else if (a === 'edit') { editing = !editing; sel = null; esel = null; esel_e = -1; redo(); }
       else if (a === 'add') { const c = { x: (d.w / 2 - view.x) / view.k, y: (d.h / 2 - view.y) / view.k }; await addAt(c.x, c.y, null); }
-      else if (a === 'reset') { if (await MSA.confirm(t('map.resetQ'), { danger: true, okLabel: t('map.reset') })) { delete p.graph; esel = null; esel_e = -1; commit(); redo(); fitAll(); apply(); } }
+      else if (a === 'reset') { if (await MSA.confirm(t('map.resetQ'), { danger: true, okLabel: t('map.reset') })) { const keepCards = p.graph && p.graph.cards; delete p.graph; if (keepCards && keepCards.length) { graphOf(p); p.graph.cards = keepCards; } esel = null; esel_e = -1; commit(); redo(); fitAll(); apply(); } }
       else if (a === 'next') {
         const s = Object.keys(L.nodes).find(id => b.ready.has(id) && !P.done(L.nodes[id].s) && !L.nodes[id].s.children.length) || Object.keys(L.nodes).find(id => !P.done(L.nodes[id].s));
         if (s) { sel = L.nodes[s].s.id; if (editing) { editing = false; redo(); } focus(s, Math.max(view.k, .85)); showDet(); }
@@ -451,6 +459,7 @@ P.renderMap = function(box, p){
   });
   /* double-click (or double-tap) a moodboard stage to open the board straight away */
   el.addEventListener('dblclick', e => { if (editing) return; const n = e.target.closest('[data-node]'); if (!n || e.target.closest('.mapdet')) return; const r = P.find(p.steps, n.dataset.node); if (r && r.step.key === 'mood' && MSA.board) MSA.board.open(p, r.step); });
+  if (MSA.cell) MSA.cell.wireMap(cellCtx);
   /* keep the map framed when the window is resized */
   if (!el._ro && window.ResizeObserver) { el._ro = new ResizeObserver(() => { if (needFit && dims().w > 0) { needFit = false; fitW(); } if (view) apply(); }); el._ro.observe(el); }
 };
