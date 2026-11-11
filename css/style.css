@@ -370,7 +370,7 @@ label.f{display:block;font-size:12.5px;color:var(--muted);margin-bottom:5px}
 .chk .cb{width:20px;height:20px;border-radius:6px}
 
 /* ---------- overlays / modals / drawers ---------- */
-.overlay{position:fixed;inset:0;background:var(--scrim);z-index:6000;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding:16px;animation:fadein2 .2s}
+.overlay,.ov-closing{position:fixed;inset:0;background:var(--scrim);z-index:6000;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding:16px;animation:fadein2 .2s}
 .modal{min-width:0;justify-self:center;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);width:min(560px,100%);max-height:calc(100dvh - 32px);display:flex;flex-direction:column;animation:modalin .25s cubic-bezier(.2,.8,.2,1)}
 .modal.wide{width:min(860px,100%)}
 .modal.xl{width:min(1100px,100%)}
@@ -379,7 +379,7 @@ label.f{display:block;font-size:12.5px;color:var(--muted);margin-bottom:5px}
 .mh h3{font-size:17px}
 .mb{padding:18px;overflow:auto}
 .mf{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
-.drawer-wrap{position:fixed;inset:0;background:var(--scrim);z-index:6000;animation:fadein2 .2s}
+.drawer-wrap,.dw-closing{position:fixed;inset:0;background:var(--scrim);z-index:6000;animation:fadein2 .2s}
 .drawer{position:absolute;top:0;bottom:0;width:min(470px,100%);background:var(--bg2);box-shadow:var(--shadow);display:flex;flex-direction:column}
 .drawer.left{left:0;border-right:1px solid var(--line);animation:dl .3s cubic-bezier(.2,.8,.2,1)}
 .drawer.right{right:0;border-left:1px solid var(--line);animation:dr .3s cubic-bezier(.2,.8,.2,1);width:min(560px,100%)}
@@ -1547,3 +1547,31 @@ html.bd-open body{overflow:hidden}
 .mc-sec label{display:flex;align-items:center;gap:6px;padding:1px 0}.mc-sec label.dn span{text-decoration:line-through;color:var(--muted)}
 .cghost{position:fixed;z-index:9999;pointer-events:none;transform:translate(-50%,-50%);background:var(--accent);color:var(--accent-ink,#fff);padding:6px 12px;border-radius:10px;display:flex;gap:6px;align-items:center;box-shadow:0 6px 18px rgba(0,0,0,.3);font-size:13px}
 .mapbox.dropok{outline:2px dashed var(--accent);outline-offset:-3px}
+
+/* ===== motion system: html[data-motion=full|light|off] (set by js/motion.js) ===== */
+:root{--mo-fast:.12s;--mo-med:.2s;--mo-ease:cubic-bezier(.2,.8,.2,1)}
+.ov-closing,.dw-closing{pointer-events:none;animation:moout .16s ease forwards}
+.ov-closing .modal{animation:modalout .16s ease forwards}
+.dw-closing .drawer.left{animation:dlout .18s ease forwards}
+.dw-closing .drawer.right{animation:drout .18s ease forwards}
+@keyframes moout{to{opacity:0}}
+@keyframes modalout{to{opacity:0;transform:translateY(10px) scale(.98)}}
+@keyframes dlout{to{transform:translateX(-100%)}}
+@keyframes drout{to{transform:translateX(100%)}}
+.mo-in{animation:moin .22s var(--mo-ease) both}
+@keyframes moin{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:none}}
+.btn,.icon-btn,.cchip,.ttab,.pchip,.seg button{transition:background .15s,border-color .15s,color .15s,transform .12s var(--mo-ease),box-shadow .15s,filter .15s}
+.btn:not([disabled]):active,.icon-btn:active,.cchip:active,.ttab:active,.pchip:active{transform:scale(.95)}
+.btn.primary:not([disabled]):hover{box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 35%,transparent)}
+.card{transition:border-color .18s,box-shadow .18s,transform .18s var(--mo-ease)}
+.ctx{animation:moin .14s var(--mo-ease) both}
+.toast{transition:opacity .3s,transform .3s}
+html[data-motion=light] .view-in{animation:fadein2 .15s both}
+html[data-motion=light] .modal{animation:fadein2 .15s both}
+html[data-motion=light] .drawer.left,html[data-motion=light] .drawer.right{animation:fadein2 .15s both}
+html[data-motion=light] .mo-in,html[data-motion=light] .ctx,html[data-motion=light] .toast{animation:fadein2 .15s both}
+html[data-motion=light] .ov-closing .modal{animation:none}
+html[data-motion=light] .dw-closing .drawer{animation:none}
+html[data-motion=light] .btn:active,html[data-motion=light] .icon-btn:active,html[data-motion=light] .cchip:active,html[data-motion=light] .ttab:active,html[data-motion=light] .pchip:active{transform:none}
+html[data-motion=light] .hometile{animation:none}
+html[data-motion=off] *,html[data-motion=off] *::before,html[data-motion=off] *::after{animation-duration:.001ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:.001ms!important;transition-delay:0s!important;scroll-behavior:auto!important}

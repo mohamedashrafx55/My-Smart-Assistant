@@ -69,6 +69,8 @@ function renderSettings(host){
       '<div class="sec"><h4>' + I('sun', 'sm') + U.esc(t('s.prefs')) + '</h4>' +
         '<div class="field"><label class="f">' + U.esc(t('appearance')) + '</label><div class="seg" id="sTheme">' +
           [['light', 'sun', 'themeLight'], ['dark', 'moon', 'themeDark'], ['auto', 'layers', 'themeAuto']].map(x => '<button data-v="' + x[0] + '" class="' + (st.theme === x[0] ? 'on' : '') + '">' + I(x[1], 'sm') + U.esc(t(x[2])) + '</button>').join('') + '</div></div>' +
+        (MSA.motion ? '<div class="field"><label class="f">' + U.esc(MSA.T('الحركة والأنيميشن', 'Motion & animation')) + '</label><div class="seg" id="sMotion">' +
+          [['auto', 'تلقائي', 'Auto'], ['full', 'كاملة', 'Full'], ['light', 'خفيفة', 'Light'], ['off', 'متوقفة', 'Off']].map(x => '<button data-v="' + x[0] + '" class="' + (MSA.motion.get() === x[0] ? 'on' : '') + '">' + U.esc(MSA.T(x[1], x[2])) + '</button>').join('') + '</div><div class="hint" style="margin-top:6px">' + U.esc(MSA.T('«تلقائي» يتبع إعداد «تقليل الحركة» في جهازك. «خفيفة» تلاشي بسيط بس. «متوقفة» بدون أي حركة.', '“Auto” follows your device’s reduce-motion setting. “Light” is simple fades only. “Off” has no motion.')) + '</div></div>' : '') +
         (MSA.net ? MSA.net.row() : '') +
         '<div class="field"><label class="f">' + U.esc(t('language')) + '</label><div class="seg" id="sLang"><button data-v="ar" class="' + (st.lang === 'ar' ? 'on' : '') + '">العربية</button><button data-v="en" class="' + (st.lang === 'en' ? 'on' : '') + '">English</button></div></div>' +
         '<div class="field"><label class="f">' + U.esc(t('accent')) + '</label><div class="swatches" id="sAcc">' + ACCENTS.map(c => '<button class="sw ' + (st.accent === c ? 'on' : '') + '" data-c="' + c + '" style="background:' + c + '" aria-label="' + c + '"></button>').join('') + '<label class="sw" style="display:grid;place-items:center;background:var(--panel2);cursor:pointer;position:relative">' + I('palette', 'sm') + '<input type="color" id="accCustom" value="' + st.accent + '" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer"></label></div></div>' +
@@ -121,6 +123,7 @@ function renderSettings(host){
     const rm = $('#rmAvatar', el); if (rm) rm.onclick = () => { S.profile.avatar = null; persist(); draw(); };
     $('#addAcct', el).onclick = () => { const a = { id: U.uid('a'), platform: 'instagram', url: '' }; S.accounts.push(a); persist(); draw(); const i = $('[data-aid="' + a.id + '"] [data-a=url]', m.el); i && i.focus(); };
     $$('.fav img[data-fav]', el).forEach(img => img.addEventListener('error', () => { const f = img.parentNode; f.innerHTML = f.dataset.badge; }));
+    $$('#sMotion button', el).forEach(b => b.onclick = () => { MSA.motion.set(b.dataset.v); draw(); });
     $$('#sTheme button', el).forEach(b => b.onclick = () => { S.settings.theme = b.dataset.v; persist(); MSA.applyTheme(); draw(); });
     $$('#sLang button', el).forEach(b => b.onclick = () => { S.settings.lang = b.dataset.v; persist(); MSA.applyLang(); draw(); });
     $$('#sAcc .sw[data-c]', el).forEach(b => b.onclick = () => { S.settings.accent = b.dataset.c; persist(); MSA.applyAccent(); draw(); });

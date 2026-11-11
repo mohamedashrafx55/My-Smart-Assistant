@@ -50,7 +50,7 @@ document.addEventListener('keydown', e => {
 function mountOverlay(wrapEl, opts){
   const root = $('#overlayRoot');
   root.appendChild(wrapEl);
-  const api = { el: wrapEl, static: !!opts.static, close(){ if (api.closed) return; api.closed = true; const i = stack.indexOf(api); if (i >= 0) stack.splice(i, 1); wrapEl.remove(); opts.onClose && opts.onClose(); } };
+  const api = { el: wrapEl, static: !!opts.static, close(){ if (api.closed) return; api.closed = true; const i = stack.indexOf(api); if (i >= 0) stack.splice(i, 1); (MSA.motion ? MSA.motion.out(wrapEl) : wrapEl.remove()); opts.onClose && opts.onClose(); } };
   stack.push(api);
   wrapEl.addEventListener('mousedown', e => { if (e.target === wrapEl && !api.static) api.close(); });
   return api;
