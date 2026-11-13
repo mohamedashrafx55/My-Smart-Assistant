@@ -1575,3 +1575,5 @@ html[data-motion=light] .dw-closing .drawer{animation:none}
 html[data-motion=light] .btn:active,html[data-motion=light] .icon-btn:active,html[data-motion=light] .cchip:active,html[data-motion=light] .ttab:active,html[data-motion=light] .pchip:active{transform:none}
 html[data-motion=light] .hometile{animation:none}
 html[data-motion=off] *,html[data-motion=off] *::before,html[data-motion=off] *::after{animation-duration:.001ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:.001ms!important;transition-delay:0s!important;scroll-behavior:auto!important}
+
+.ex-nokey{display:grid;gap:8px;padding:12px 14px;margin-bottom:10px;border:1px dashed var(--line);border-radius:12px;background:var(--panel)}.ex-nokey span{font-size:13px;color:var(--muted);line-height:1.6}
