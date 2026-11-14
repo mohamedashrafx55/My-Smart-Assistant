@@ -41,6 +41,11 @@ function form(r, done){
       const u = $('#rfU', a.el); let url = u ? u.value.trim() : r.url; if (!r.att && !url) { u.focus(); return; } if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
       done({ title: $('#rfT', a.el).value.trim(), url, tags: parseTags($('#rfG', a.el).value) }); a.close(); } }] });
 }
+function pickKind(){
+  return new Promise(res => { let v = null; const m = MSA.modal({ title: T('نوع الملف', 'File type'), footer: false, size: 'sm',
+    body: '<div class="capchoice">' + [['doc', 'doc', T('مستند', 'Document')], ['audio', 'music', T('صوت', 'Audio')], ['video', 'video', T('فيديو', 'Video')]].map(k => '<button class="btn lg" data-k="' + k[0] + '">' + I(k[1]) + '<span>' + esc(k[2]) + '</span></button>').join('') + '</div>',
+    onMount: el => $$('[data-k]', el).forEach(b => b.onclick = () => { v = b.dataset.k; m.close(); }), onClose: () => res(v) }); });
+}
 async function rename(k, id){
   if (k === 'f') { const f = folder(id); const v = await MSA.ask({ title: t('rename'), value: f.name }); if (v) { f.name = v; redraw(); } }
   else { const r = R().find(x => x.id === id); form(r, v => { Object.assign(r, v); redraw(); }); }
@@ -82,7 +87,7 @@ function refCard(r, q){
   return '<div class="card ref ' + (on ? 'is-sel ' : '') + (cut ? 'is-cut' : '') + '" draggable="true" data-kind="r" data-id="' + r.id + '">' +
     '<input type="checkbox" class="cb selbox ' + (on ? 'on' : '') + '" data-act="sel" ' + (on ? 'checked' : '') + ' aria-label="select">' +
     (r.att ? MSA.attHTML(r.att, false) : '<a class="ref-link" data-open="' + esc(r.url) + '">' + MSA.conn.logo({ id: '', name: dom(r.url), url: r.url }) + '<span dir="ltr">' + esc(dom(r.url)) + '</span></a>') +
-    '<div class="ref-b"><div class="row" style="gap:4px;align-items:flex-start"><b dir="auto" class="grow">' + esc(titleOf(r)) + '</b>' + favStar(r.fav, 'fav', r.id) + '</div>' + (q ? '<span class="hint">' + esc(chain(r.folder).map(x => x.name).join(' / ') || t('learn.root')) + '</span>' : '') + '<div class="tags">' + (r.tags || []).map(x => '<span class="tag">#' + esc(x) + '</span>').join('') + '</div></div></div>';
+    '<div class="ref-b"><div class="row" style="gap:4px;align-items:flex-start"><b dir="auto" class="grow">' + esc(titleOf(r)) + '</b>' + MSA.study.noteBtn(r, 'rnote') + MSA.study.doneBtn(r, 'rdone') + favStar(r.fav, 'fav', r.id) + '</div>' + MSA.study.badge(r) + (q ? '<span class="hint">' + esc(chain(r.folder).map(x => x.name).join(' / ') || t('learn.root')) + '</span>' : '') + '<div class="tags">' + (r.tags || []).map(x => '<span class="tag">#' + esc(x) + '</span>').join('') + '</div></div></div>';
 }
 
 function draw(b){
@@ -95,7 +100,7 @@ function draw(b){
   fs = fs.slice().sort(cmp); rs = rs.slice().sort(cmp);
   const path = favMode() ? [{ id: FAV, name: '★ ' + T('المفضلة', 'Favourites') }] : chain(cid), nsel = sel.size;
   let html = '<div class="crumbs"><button data-act="crumb" data-id="" data-drop="" class="' + (!cid && !favMode() ? 'last' : '') + '">' + I('image', 'sm') + ' ' + esc(T('المراجع', 'References')) + '</button>' + path.map((f, i) => I('chev-r', 'chev') + '<button data-act="crumb" data-id="' + f.id + '" data-drop="' + f.id + '" class="' + (i === path.length - 1 ? 'last' : '') + '">' + esc(f.name) + '</button>').join('') + '</div>' +
-    '<div class="toolbar" style="margin-top:12px"><button class="btn primary" data-act="img">' + I('image', 'sm') + esc(T('إضافة صور', 'Add images')) + '</button><button class="btn" data-act="link">' + I('link', 'sm') + esc(T('إضافة رابط', 'Add link')) + '</button>' +
+    '<div class="toolbar" style="margin-top:12px"><button class="btn primary" data-act="img">' + I('image', 'sm') + esc(T('إضافة صور', 'Add images')) + '</button><button class="btn" data-act="link">' + I('link', 'sm') + esc(T('إضافة رابط', 'Add link')) + '</button><button class="btn" data-act="file">' + I('doc', 'sm') + esc(T('إضافة ملف / صوت / فيديو', 'Add file / audio / video')) + '</button>' +
     '<button class="btn" data-act="newfolder">' + I('folder-plus', 'sm') + esc(t('newFolder')) + '</button>' +
     (clip ? '<button class="btn" data-act="paste">' + I('paste', 'sm') + esc(t('paste')) + ' (' + clip.items.length + ')</button>' : '') +
     '<button class="btn ' + (selMode ? 'primary' : '') + '" data-act="selmode">' + I('check-c', 'sm') + esc(t('select')) + '</button>' +
@@ -130,9 +135,13 @@ function bind(b){
     if (list.some(i => i.k === 'f')) m.push({ icon: 'palette', label: t('folderColor'), onClick: () => colorize(list) });
     m.push('-', { icon: 'trash', label: t('delete'), danger: true, onClick: () => del(list) }); MSA.ctx(x, y, m);
   };
+  if (!b._bound) { b._bound = true;
   MSA.on(b, {
     img: async () => { const a = await MSA.addFiles('image'); if (!a.length) return; a.forEach(x => R().unshift({ id: U.uid('rf'), att: x, title: '', tags: tag ? [tag] : [], folder: cur(), created: Date.now() })); redraw(); },
     link: () => form({}, v => { R().unshift(Object.assign({ id: U.uid('rf'), folder: cur(), created: Date.now() }, v)); redraw(); }),
+    rnote: el => { const r = R().find(x => x.id === el.dataset.fid); if (r) MSA.study.notes(r, titleOf(r), redraw); },
+    rdone: el => { const r = R().find(x => x.id === el.dataset.fid); if (r) { MSA.study.toggleDone(r); redraw(); } },
+    file: async () => { const k = await pickKind(); if (!k) return; const a = await MSA.addFiles(k); if (!a.length) return; a.forEach(x => R().unshift({ id: U.uid('rf'), att: x, title: '', tags: tag ? [tag] : [], folder: cur(), created: Date.now() })); redraw(); },
     fav: el => { const r = R().find(x => x.id === el.dataset.fid); if (!r) return; r.fav = !r.fav; if (!r.fav) delete r.fav; redraw(); MSA.toast(r.fav ? T('أُضيف للمفضلة ★', 'Added to favourites ★') : T('أُزيل من المفضلة', 'Removed from favourites'), 'ok'); },
     newfolder: newFolder, paste: () => paste(cur()),
     selmode: () => { selMode = !selMode; if (!selMode) sel.clear(); redraw(); },
@@ -142,6 +151,7 @@ function bind(b){
     's-color': () => colorize(selected()), 's-del': () => del(selected()), 's-clear': () => { sel.clear(); selMode = false; redraw(); }
   });
   b.addEventListener('click', e => {
+    const op = e.target.closest('[data-open],.att'); if (op && !e.target.closest('[data-act]')) { const c = itemFrom(op), r = c && c.k === 'r' && R().find(x => x.id === c.id); if (r) MSA.study.seen(r, r.att ? ({ image: T('صورة', 'image'), audio: T('صوت', 'audio'), video: T('فيديو', 'video') })[r.att.kind] || T('مستند', 'document') : T('رابط', 'link'), titleOf(r)); }
     const tg = e.target.closest('[data-tag]'); if (tg) { tag = tg.dataset.tag; redraw(); return; }
     if (e.target.closest('[data-favfolder]')) { enter(FAV); return; }
     if (e.target.closest('[data-act],input,select,[data-open]')) return;
@@ -150,8 +160,6 @@ function bind(b){
     if (it.k === 'f') enter(it.id);
   });
   b.addEventListener('contextmenu', e => { const it = itemFrom(e.target); if (!it) return; e.preventDefault(); menu(it, e.clientX, e.clientY); });
-  const q = $('#rfQ', b); q.addEventListener('input', e => { query = e.target.value; const p = e.target.selectionStart; draw(b); const n = $('#rfQ', b); n.focus(); n.setSelectionRange(p, p); });
-  $('#rfS', b).addEventListener('change', e => { sort = e.target.value; redraw(); });
   let lp = null;
   b.addEventListener('touchstart', e => { const it = itemFrom(e.target); if (!it) return; const c = e.touches[0]; lp = setTimeout(() => { lp = null; menu(it, c.clientX, c.clientY); }, 600); }, { passive: true });
   ['touchend', 'touchmove', 'touchcancel'].forEach(n => b.addEventListener(n, () => { if (lp) { clearTimeout(lp); lp = null; } }, { passive: true }));
@@ -160,6 +168,9 @@ function bind(b){
   b.addEventListener('dragover', e => { const d = dt(e); if (d) { e.preventDefault(); d.classList.add('drop-hot'); } });
   b.addEventListener('dragleave', e => { const d = dt(e); if (d) d.classList.remove('drop-hot'); });
   b.addEventListener('drop', e => { const d = dt(e); if (!d) return; e.preventDefault(); d.classList.remove('drop-hot'); try { move(JSON.parse(e.dataTransfer.getData('text/msa-ref')), d.dataset.drop || null); } catch (err) {} });
+  }
+  const q = $('#rfQ', b); q.addEventListener('input', e => { query = e.target.value; const p = e.target.selectionStart; draw(b); const n = $('#rfQ', b); n.focus(); n.setSelectionRange(p, p); });
+  $('#rfS', b).addEventListener('change', e => { sort = e.target.value; redraw(); });
   if (!b._attB) { b._attB = true; MSA.bindAtts(b, () => R().filter(r => r.att).map(r => r.att), () => {}); }
 }
 document.addEventListener('keydown', e => {

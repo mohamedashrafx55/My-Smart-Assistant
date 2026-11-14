@@ -79,7 +79,7 @@ function listHTML(){
   const now = Date.now(), today = ymd(now);
   const sortFn = (a, b) => ((dueMs(a) ?? 9e15) - (dueMs(b) ?? 9e15)) || (PRANK[a.priority] - PRANK[b.priority]);
   const groups = [
-    ['overdue', open.filter(x => dueMs(x) != null && dueMs(x) < now && ymd(dueMs(x)) !== today || (dueMs(x) != null && dueMs(x) < now))],
+    ['overdue', open.filter(x => !x.routine && dueMs(x) != null && dueMs(x) < now)],
     ['today', open.filter(x => dueMs(x) != null && dueMs(x) >= now && ymd(dueMs(x)) === today)],
     ['upcoming', open.filter(x => dueMs(x) != null && ymd(dueMs(x)) > today)],
     ['nodate', open.filter(x => dueMs(x) == null)]
@@ -161,7 +161,7 @@ function bind(host){
   });
 }
 function blank(o){
-  return Object.assign({ id: U.uid('t'), type: 'task', title: '', desc: '', status: 'todo', priority: 'normal', start: '', due: '', remind: '', remindAt: '', repeat: '', tags: [], checklist: [], atts: [], color: '', pinned: false, created: Date.now(), updated: Date.now(), notified: false }, o || {});
+  return Object.assign({ id: U.uid('t'), type: 'task', title: '', desc: '', status: 'todo', priority: 'normal', start: '', due: '', remind: '', remindAt: '', repeat: '', tags: [], checklist: [], subOn: false, atts: [], color: '', pinned: false, created: Date.now(), updated: Date.now(), notified: false }, o || {});
 }
 function quickAdd(){
   const inp = $('#qadd'); const v = inp.value.trim(); if (!v) { inp.focus(); return; }
@@ -180,6 +180,7 @@ function openEditor(existing, preset){
       { label: t('cancel'), cls: 'ghost', onClick: async api => { await MSA.files.delMany(added); api.close(); } },
       { label: t('save'), cls: 'primary', icon: 'check', onClick: async (api, el) => {
         collect(el); if (!x.title.trim()) { $('#tTitle', el).focus(); $('#tTitle', el).style.borderColor = 'var(--danger)'; return; }
+        if (x.type === 'task' && MSA.sched && !(await MSA.sched.confirmSave(x))) return;
         x.title = x.title.trim(); x.updated = Date.now(); x.notified = false;
         if (x.status === 'done' && !x.completedAt) x.completedAt = Date.now();
         const removed = existing ? orig.atts.filter(a => !x.atts.some(b => b.id === a.id)) : [];
@@ -199,11 +200,12 @@ function openEditor(existing, preset){
       x.start = $('#tStart', el).value; x.due = $('#tDue', el).value;
       x.remind = $('#tRemind', el).value; x.remindAt = $('#tRemindAt', el) ? $('#tRemindAt', el).value : '';
       x.repeat = $('#tRepeat', el).value;
+      const so = $('#tSubOn', el); if (so) x.subOn = so.checked;
     }
   };
   const draw = () => {
     const cur = $('#tTitle', body) ? { title: $('#tTitle', body).value } : null;
-    const light = document.documentElement.dataset.theme === 'light';
+    const light = document.documentElement.dataset.theme === 'light', subOn = x.type !== 'task' || !!x.subOn || (x.checklist || []).length > 0;
     body.innerHTML =
       '<div class="seg" id="tType" style="margin-bottom:16px"><button data-t="task" class="' + (x.type === 'task' ? 'on' : '') + '">' + I('checks', 'sm') + U.esc(t('task')) + '</button><button data-t="note" class="' + (x.type === 'note' ? 'on' : '') + '">' + I('note', 'sm') + U.esc(t('note')) + '</button></div>' +
       '<div class="field"><input id="tTitle" type="text" style="font-size:17px;font-weight:600" placeholder="' + U.esc(t(x.type === 'note' ? 'noteTitlePh' : 'taskTitlePh')) + '" value="' + U.esc(x.title) + '"></div>' +
@@ -219,7 +221,8 @@ function openEditor(existing, preset){
       '<div class="field"><label class="f">' + U.esc(t('description')) + '</label><div class="etools">' +
         '<button data-c="bold" title="Bold"><b>B</b></button><button data-c="italic" title="Italic"><i>I</i></button><button data-c="underline" title="Underline"><u>U</u></button><button data-c="insertUnorderedList" title="List">' + I('list-ul', 'sm') + '</button><button data-c="h3" title="Heading">' + I('heading', 'sm') + '</button></div>' +
         '<div class="editor" id="tDesc" contenteditable="true" data-ph="' + U.esc(t('descPh')) + '">' + U.sanitize(x.desc) + '</div></div>' +
-      '<div class="field"><label class="f">' + U.esc(t('checklist')) + '</label><div id="tCl">' + (x.checklist || []).map(c => '<div class="chk" data-cid="' + c.id + '"><input type="checkbox" class="cb" ' + (c.done ? 'checked' : '') + '><input type="text" value="' + U.esc(c.text) + '"><button class="icon-btn sm danger" data-cdel aria-label="' + U.esc(t('delete')) + '">' + I('x', 'sm') + '</button></div>').join('') + '</div>' +
+      (x.type === 'task' ? '<label class="subopt"><input type="checkbox" class="cb" id="tSubOn" ' + (subOn ? 'checked' : '') + '><span>' + U.esc(MSA.T('إضافة مهام فرعية بعلامة صح (اختياري)', 'Add sub-tasks with check marks (optional)')) + '</span></label>' : '') +
+      '<div class="field" id="tClBox" ' + (subOn ? '' : 'hidden') + '><label class="f">' + U.esc(t('checklist')) + '</label><div id="tCl">' + (x.checklist || []).map(c => '<div class="chk" data-cid="' + c.id + '"><input type="checkbox" class="cb" ' + (c.done ? 'checked' : '') + '><input type="text" value="' + U.esc(c.text) + '"><button class="icon-btn sm danger" data-cdel aria-label="' + U.esc(t('delete')) + '">' + I('x', 'sm') + '</button></div>').join('') + '</div>' +
         '<div class="row" style="margin-top:6px"><input id="tClNew" type="text" placeholder="' + U.esc(t('addChecklistItem')) + '" style="flex:1"><button class="btn sm" id="tClAdd">' + I('plus', 'sm') + '</button></div></div>' +
       '<div class="field"><label class="f">' + U.esc(t('tags')) + '</label><div class="row" id="tTags" style="gap:6px;margin-bottom:6px">' + (x.tags || []).map(g => '<span class="chip">#' + U.esc(g) + '<button data-tdel="' + U.esc(g) + '" aria-label="remove">' + I('x', 'sm') + '</button></span>').join('') + '</div><input id="tTagNew" type="text" placeholder="' + U.esc(t('addTag')) + '"></div>' +
       '<div class="field"><label class="f">' + U.esc(t('attachments')) + '</label><div class="row" style="margin-bottom:10px">' +
@@ -236,6 +239,7 @@ function openEditor(existing, preset){
     const ed = $('#tDesc', el); ed.addEventListener('paste', e => { e.preventDefault(); document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain')); });
     const rm = $('#tRemind', el); if (rm) rm.onchange = () => { collect(el); draw(); if (x.remind) MSA.askNotifyPermission(); };
     $$('#tCol .sw', el).forEach(b => b.onclick = () => { collect(el); x.color = NCOLORS[+b.dataset.i]; draw(); });
+    const so = $('#tSubOn', el); if (so) so.onchange = async () => { collect(el); if (!so.checked && (x.checklist || []).length) { if (!await MSA.confirm(MSA.T('إلغاء المهام الفرعية هيمسح ' + x.checklist.length + ' مهمة فرعية. متأكد؟', 'Turning off sub-tasks deletes ' + x.checklist.length + ' item(s). Sure?'), { danger: true })) { so.checked = true; return; } x.checklist = []; } x.subOn = so.checked; draw(); };
     const pin = $('#tPin', el); if (pin) pin.onclick = () => { collect(el); x.pinned = !x.pinned; draw(); };
     const addCl = () => { const i = $('#tClNew', el), v = i.value.trim(); if (!v) return; collect(el); (x.checklist = x.checklist || []).push({ id: U.uid('c'), text: v, done: false }); draw(); setTimeout(() => $('#tClNew', m.el).focus(), 20); };
     $('#tClAdd', el).onclick = addCl; $('#tClNew', el).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addCl(); } });

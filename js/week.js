@@ -23,7 +23,7 @@ const isDone = x => x.status === 'done';
 const timeOf = x => { const m = String(x.due || '').match(/T(\d\d):(\d\d)/); return m && !(m[1] === '23' && m[2] === '59') ? m[1] + ':' + m[2] : ''; };
 const PR = { urgent: 0, high: 1, normal: 2, low: 3 };
 const sorter = (a, b) => (isDone(a) - isDone(b)) || ((timeOf(a) || '99') < (timeOf(b) || '99') ? -1 : (timeOf(a) || '99') > (timeOf(b) || '99') ? 1 : 0) || (PR[a.priority] - PR[b.priority]) || ((a.created || 0) - (b.created || 0));
-const overdue = () => all().filter(x => !isDone(x) && keyOf(x) && keyOf(x) < todayKey()).sort((a, b) => keyOf(a) < keyOf(b) ? -1 : 1);
+const overdue = () => all().filter(x => !isDone(x) && !x.routine && keyOf(x) && keyOf(x) < todayKey()).sort((a, b) => keyOf(a) < keyOf(b) ? -1 : 1);
 const undated = () => all().filter(x => !isDone(x) && !keyOf(x)).sort(sorter);
 const onDay = k => all().filter(x => keyOf(x) === k).sort(sorter);
 function setDay(x, k){ x.due = k + 'T' + (timeOf(x) || '23:59'); x.notified = false; x.updated = Date.now(); }
@@ -39,12 +39,17 @@ const mode = () => wk().mode === 'week' ? 'week' : 'day';
 const persist = () => { MSA.save(); MSA.updateCounts && MSA.updateCounts(); };
 
 /* ---------- rows ---------- */
+function subsHTML(x){
+  const cl = x.checklist || []; if (!cl.length) return '';
+  return '<span class="wk-subs">' + cl.map(c => '<label class="wk-sub-i' + (c.done ? ' done' : '') + '"><input type="checkbox" class="cb" data-wk="sub" data-sid="' + esc(c.id) + '" ' + (c.done ? 'checked' : '') + '><span dir="auto">' + esc(c.text) + '</span></label>').join('') + '</span>';
+}
 function rowHTML(x, o){
   o = o || {};
   const t = timeOf(x), cl = x.checklist || [], d = keyOf(x);
   const meta = [];
   if (x.priority && x.priority !== 'normal') meta.push('<span class="pri-' + x.priority + '" title="' + esc(MSA.t('prio.' + x.priority)) + '">' + I('flag', 'sm') + '</span>');
-  if (t) meta.push('<span class="pill">' + I('clock', 'sm') + esc(t) + '</span>');
+  if (t) meta.push('<span class="pill">' + I('clock', 'sm') + esc((MSA.sched && MSA.sched.range(x)) || t) + '</span>');
+  if (MSA.sched && !isDone(x) && MSA.sched.inConflict(x)) meta.push('<span class="pill over" title="' + esc(T('تعارض مواعيد', 'Schedule clash')) + '">⚠ ' + esc(T('تعارض', 'Clash')) + '</span>');
   if (o.date && d) meta.push('<span class="pill over">' + esc(fmt(parseKey(d), { day: 'numeric', month: 'short' })) + '</span>');
   if (cl.length) meta.push('<span class="pill">' + I('checks', 'sm') + cl.filter(i => i.done).length + '/' + cl.length + '</span>');
   if (x.repeat) meta.push('<span class="pill">' + I('repeat', 'sm') + '</span>');
@@ -53,14 +58,14 @@ function rowHTML(x, o){
   (x.tags || []).slice(0, 2).forEach(g => meta.push('<span class="pill">#' + esc(g) + '</span>'));
   return '<div class="wk-t p-' + esc(x.priority || 'normal') + (isDone(x) ? ' done' : '') + '" draggable="true" data-id="' + esc(x.id) + '">' +
     '<input type="checkbox" class="cb" data-wk="done" ' + (isDone(x) ? 'checked' : '') + ' aria-label="' + esc(T('تم', 'Done')) + '">' +
-    '<div class="wk-b" data-wk="edit" role="button" tabindex="0"><span class="wk-ti" dir="auto">' + esc(x.title || T('بدون عنوان', 'Untitled')) + '</span>' + (meta.length ? '<span class="wk-m">' + meta.join('') + '</span>' : '') + '</div>' +
+    '<div class="wk-b" data-wk="edit" role="button" tabindex="0"><span class="wk-ti" dir="auto">' + esc(x.title || T('بدون عنوان', 'Untitled')) + '</span>' + (meta.length ? '<span class="wk-m">' + meta.join('') + '</span>' : '') + subsHTML(x) + '</div>' +
     '<button class="icon-btn sm" data-wk="more" aria-label="' + esc(T('المزيد', 'More')) + '">' + I('more', 'sm') + '</button></div>';
 }
 const secHTML = (title, cls, rows, extra) => '<div class="wk-sec ' + (cls || '') + '"><div class="wk-sh"><b>' + esc(title) + '</b><span class="wk-n">' + rows.length + '</span>' + (extra || '') + '</div>' + rows.join('') + '</div>';
 
 /* ---------- widget ---------- */
 function widgetHTML(){
-  ensure();
+  ensure(); MSA.sched && MSA.sched.ensure();
   const tk = todayKey(), days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), keys = days.map(dk);
   const wkAll = keys.flatMap(onDay), done = wkAll.filter(isDone).length, tot = wkAll.length, pct = tot ? Math.round(done * 100 / tot) : 0;
   const range = fmt(days[0], { day: 'numeric', month: 'short' }) + ' – ' + fmt(days[6], { day: 'numeric', month: 'short' });
@@ -73,6 +78,8 @@ function widgetHTML(){
   const vis = l => hideDone ? l.filter(x => !isDone(x)) : l;
   if (m === 'day') {
     const l = vis(onDay(selKey));
+    const cf = MSA.sched ? MSA.sched.dayConflicts(selKey) : [];
+    if (cf.length) body += '<div class="wk-conf">⚠ ' + esc(T('فيه تعارض مواعيد النهارده: ', 'Schedule clash: ') + cf.map(p => MSA.sched.label(p[0]) + ' ↔ ' + MSA.sched.label(p[1])).join(' | ')) + '</div>';
     body += '<div class="wk-sec"><div class="wk-sh"><b>' + esc(selKey === tk ? T('النهارده', 'Today') : fmt(parseKey(selKey), { weekday: 'long', day: 'numeric', month: 'long' })) + '</b><span class="wk-n">' + l.length + '</span></div>' +
       (l.length ? l.map(x => rowHTML(x)).join('') : '<div class="wk-empty">' + esc(T('مفيش مهام لليوم ده — اكتب أول مهمة فوق ✨', 'Nothing planned for this day — add the first task above ✨')) + '</div>') + '</div>';
     if (selKey === tk) { const u = undated(); if (u.length) body += secHTML(T('بدون تاريخ', 'No date'), '', u.map(x => rowHTML(x))); }
@@ -86,6 +93,7 @@ function widgetHTML(){
     '<div class="wk-bar"><i style="width:' + pct + '%"></i></div><div class="wk-sub"><span>' + esc(T(done + ' من ' + tot + ' اتعملت', done + ' of ' + tot + ' done')) + '</span><span class="wk-tools">' +
       '<div class="seg" role="group"><button data-wk="mode" data-m="day" class="' + (m === 'day' ? 'on' : '') + '">' + esc(T('يوم', 'Day')) + '</button><button data-wk="mode" data-m="week" class="' + (m === 'week' ? 'on' : '') + '">' + esc(T('أسبوع', 'Week')) + '</button></div>' +
       '<button class="icon-btn sm' + (hideDone ? ' on' : '') + '" data-wk="hidedone" title="' + esc(T('إخفاء المكتملة', 'Hide completed')) + '" aria-label="hide done">' + I(hideDone ? 'eye-off' : 'eye', 'sm') + '</button>' +
+      '<button class="icon-btn sm" data-wk="routine" title="' + esc(T('الروتين اليومي', 'Daily routine')) + '" aria-label="routine">' + I('clock', 'sm') + '</button>' +
       '<button class="icon-btn sm' + (dailyOn ? ' on' : '') + '" data-wk="alert" title="' + esc(T('التنبيه اليومي', 'Daily alert')) + '" aria-label="alert">' + I('bell', 'sm') + '</button></span></div>' +
     '<div class="wk-days">' + chips + '</div>' +
     '<div class="wk-add"><input id="wkIn" dir="auto" maxlength="200" placeholder="' + esc(T('أضف مهمة لـ ' + (selKey === tk ? 'النهارده' : fmt(parseKey(selKey), { weekday: 'long' })) + '…', 'Add a task for ' + (selKey === tk ? 'today' : fmt(parseKey(selKey), { weekday: 'long' })) + '…')) + '"><input id="wkTm" type="time" aria-label="' + esc(T('الوقت (اختياري)', 'Time (optional)')) + '"><button class="btn sm primary" data-wk="add">' + I('plus', 'sm') + '</button><button class="btn sm" data-wk="full" title="' + esc(T('تفاصيل كاملة (أولوية، تذكير، تكرار…)', 'Full details (priority, reminder, repeat…)')) + '">' + I('pencil', 'sm') + '</button></div>' +
@@ -118,7 +126,10 @@ function rowMenu(x, ev){
 }
 function wire(el){
   el.onclick = async e => {
+    if (e.target.closest('.wk-subs') && !e.target.matches('input')) return;
     const b = e.target.closest('[data-wk]'); if (!b) return; const a = b.dataset.wk, row = b.closest('[data-id]'), x = row ? byId(row.dataset.id) : null;
+    if (a === 'sub') { const sx = row ? byId(row.dataset.id) : null, c = sx && (sx.checklist || []).find(i => i.id === b.dataset.sid); if (c) { c.done = b.checked; sx.updated = Date.now(); persist(); redraw(); } return; }
+    if (a === 'routine') { MSA.sched.manage(() => redraw()); return; }
     if (a === 'done') { if (x) { API().setDone(x, b.checked); persist(); redraw(); } return; }
     if (a === 'edit') { if (x) MSA.openTaskEditor(x); return; }
     if (a === 'more') { if (x) { e.stopPropagation(); const r = b.getBoundingClientRect(); rowMenu(x, { clientX: ar() ? r.left : r.right - 160, clientY: r.bottom + 4 }); } return; }
@@ -128,7 +139,7 @@ function wire(el){
     if (a === 'mode') { wk().mode = b.dataset.m; MSA.save(); redraw(); return; }
     if (a === 'hidedone') { wk().hideDone = !wk().hideDone; MSA.save(); redraw(); return; }
     if (a === 'alert') { openAlertSettings(); return; }
-    if (a === 'add') { const i = $('#wkIn', el); if (addTask(i.value, selKey, $('#wkTm', el).value)) { i.value = ''; $('#wkTm', el).value = ''; redraw(); $('#wkIn', el).focus(); } else i.focus(); return; }
+    if (a === 'add') { const i = $('#wkIn', el), tmv = $('#wkTm', el).value; if (tmv && i.value.trim() && MSA.sched) { const probe = { id: '_p', type: 'task', title: i.value.trim(), due: selKey + 'T' + tmv }; if (!await MSA.sched.confirmSave(probe)) return; } if (addTask(i.value, selKey, tmv)) { i.value = ''; $('#wkTm', el).value = ''; redraw(); $('#wkIn', el).focus(); } else i.focus(); return; }
     if (a === 'addday') { selKey = b.dataset.k; wk().mode = 'day'; MSA.save(); redraw(); const i = $('#wkIn', el); i && i.focus(); return; }
     if (a === 'full') { const i = $('#wkIn', el); const title = i.value.trim(); i.value = ''; MSA.openTaskEditor(null, { type: 'task', title, due: selKey + 'T23:59' }); return; }
     if (a === 'odtoday') { overdue().forEach(y => setDay(y, todayKey())); persist(); redraw(); return; }

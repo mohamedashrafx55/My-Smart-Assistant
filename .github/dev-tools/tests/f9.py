@@ -7,7 +7,7 @@ async def conn(pg,pw='pw123456'):
 RUN="async f=>{return JSON.stringify(await MSA.sync.run({force:!!f}))}"
 async def addtask(pg,tid,title):
     await pg.evaluate("([i,t])=>{MSA.state.tasks.push({id:i,title:t,status:'todo',atts:[],created:Date.now()});MSA.saveNow()}",[tid,title])
-async def titles(pg): return await pg.evaluate("MSA.state.tasks.filter(t=>!/تجريبي/.test(t.desc||'')).map(t=>t.title).sort()")
+async def titles(pg): return await pg.evaluate("MSA.state.tasks.filter(t=>!t.routine&&!/تجريبي/.test(t.desc||'')).map(t=>t.title).sort()")
 async def main():
     proc=subprocess.Popen(['python3','mock_supabase.py','8790']); time.sleep(1); urllib.request.urlopen(MOCK+'/__reset')
     try:

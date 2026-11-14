@@ -106,7 +106,7 @@ async def main():
         await pg.mouse.click(5, 5)  # safe click in toolbar zone? (no-op)
         # flip
         await pg.evaluate("document.querySelector('#bdStage').focus()")
-        await pg.mouse.click(cx+120, cy+60)
+        _b = await pg.locator('.bitem').first.bounding_box(); await pg.mouse.click(_b['x']+_b['width']/2, _b['y']+_b['height']/2)  # centre of the item itself (it was scaled/rotated above), not a fixed offset
         await pg.keyboard.press('Shift+H'); await pg.wait_for_timeout(150)
         ok('Shift+H flips horizontally', (await items(pg))[0].get('fx') == 1)
         await pg.keyboard.press('g'); await pg.wait_for_timeout(150)

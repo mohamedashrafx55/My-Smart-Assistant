@@ -10,7 +10,8 @@ async def main():
     async with Env() as e:
         # ---------- fresh install: empty, board + payments card present ----------
         pg=await e.page(lang='ar',demo=False); await pg.evaluate("MSA.state.ui.hometab='tasks';MSA.save();MSA.rerender(false)"); await pg.wait_for_timeout(500)
-        ok('fresh install: no demo project / tasks', await pg.evaluate("MSA.state.projects.length===0&&MSA.state.tasks.length===0"))
+        ok('fresh install: no demo project / tasks (only the built-in daily routine)', await pg.evaluate("MSA.state.projects.length===0&&MSA.state.tasks.every(x=>x.routine)"))
+        await pg.evaluate("(()=>{MSA.state.routine={off:true,blocks:[],gen:{}};MSA.state.tasks=MSA.state.tasks.filter(x=>!x.routine);MSA.save();MSA.rerender(false)})()"); await pg.wait_for_timeout(300)   # the routine has its own suite (r_sched); switch it off here so these counts stay about plain tasks
         ok('tabs: tasks + payments side by side', await pg.locator('[data-ht=tasks]').count()==1 and await pg.locator('[data-ht=pay]').count()==1)
         bx=await pg.evaluate("(()=>{const a=document.querySelector('[data-ht=tasks]').getBoundingClientRect(),b=document.querySelector('[data-ht=pay]').getBoundingClientRect();return [a.top,b.top,a.left,b.left]})()")
         ok('tabs on the same row', abs(bx[0]-bx[1])<4 and bx[2]!=bx[3], bx)

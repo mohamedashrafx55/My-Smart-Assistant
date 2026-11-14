@@ -99,6 +99,7 @@ function addLinks(){
   });
 }
 function openVideo(v){
+  MSA.study.seen(v, MSA.T('فيديو', 'video'), titleOf(v));
   const yt = v.vid;
   const player = yt
     ? '<div style="position:relative;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden"><iframe src="https://www.youtube-nocookie.com/embed/' + yt + '?autoplay=1&rel=0" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>'
@@ -171,7 +172,7 @@ function videoCard(v, q){
     '<div class="vthumb" style="' + (th ? 'background-image:url(\'' + U.esc(th) + '\')' : 'background:linear-gradient(135deg,#2c3e50,#4b6a88)') + '">' + (th ? '' : I('video', 'lg')) +
     '<span class="play">' + I('play') + '</span><span class="host">' + U.esc(hostOf(v.url)) + '</span></div>' +
     '<input type="checkbox" class="cb selbox ' + (on ? 'on' : '') + '" data-act="sel" ' + (on ? 'checked' : '') + ' aria-label="select">' +
-    '<div class="vbody"><div class="row" style="gap:4px;align-items:flex-start"><div class="vtitle grow">' + U.esc(titleOf(v)) + '</div>' + favStar(v.fav, v.id) + '</div><div class="vsub">' + U.esc(q ? chain(v.folder).map(x => x.name).join(' / ') || t('learn.root') : (v.author || MSA.fmtDate(v.created))) + '</div></div></div>';
+    '<div class="vbody"><div class="row" style="gap:4px;align-items:flex-start"><div class="vtitle grow">' + U.esc(titleOf(v)) + '</div>' + MSA.study.noteBtn(v, 'vnote') + MSA.study.doneBtn(v, 'vdone') + favStar(v.fav, v.id) + '</div><div class="vsub">' + U.esc(q ? chain(v.folder).map(x => x.name).join(' / ') || t('learn.root') : (v.author || MSA.fmtDate(v.created))) + '</div>' + MSA.study.badge(v) + '</div></div>';
 }
 const cmp = (a, b) => sort === 'new' ? (b.created || 0) - (a.created || 0) : String(a.name || titleOf(a)).localeCompare(String(b.name || titleOf(b)), MSA.state.settings.lang);
 
@@ -234,6 +235,8 @@ function bind(host){
   };
   const enter = id => { MSA.state.ui.learnFolder = id || null; query = ''; sel.clear(); MSA.save(); MSA.rerender(false); };
   MSA.on(host, {
+    vnote: el => { const v = L().videos.find(x => x.id === el.dataset.fid); if (v) MSA.study.notes(v, titleOf(v), () => MSA.rerender()); },
+    vdone: el => { const v = L().videos.find(x => x.id === el.dataset.fid); if (v) { MSA.study.toggleDone(v); MSA.rerender(); } },
     fav: el => { const v = L().videos.find(x => x.id === el.dataset.fid); if (!v) return; v.fav = !v.fav; if (!v.fav) delete v.fav; MSA.save(); MSA.rerender(); MSA.toast(v.fav ? MSA.T('أُضيف للمفضلة ★', 'Added to favourites ★') : MSA.T('أُزيل من المفضلة', 'Removed from favourites'), 'ok'); },
     addlinks: addLinks, newfolder: newFolder, paste: () => pasteInto(curId()),
     selmode: () => { selMode = !selMode; if (!selMode) sel.clear(); MSA.rerender(); },

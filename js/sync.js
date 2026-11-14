@@ -50,7 +50,7 @@ function mergeStates(a, b){
   return out;
 }
 const isDemo = p => !!(p && /مشروع تجريبي/.test((p.name || '') + ' ' + (p.desc || '')));
-const pristine = () => { const s = S(); return !(s.projects || []).some(p => !isDemo(p)) && !(s.tasks || []).some(t => !isDemo(t)) && !(s.accounts && s.accounts.length) && !((s.learning && s.learning.folders || []).length) && !(s.clients && s.clients.length); };
+const pristine = () => { const s = S(); return !(s.projects || []).some(p => !isDemo(p)) && !(s.tasks || []).some(t => !isDemo(t) && !t.routine) && !(s.accounts && s.accounts.length) && !((s.learning && s.learning.folders || []).length) && !(s.clients && s.clients.length); };
 
 /* ---------- network ---------- */
 let tok = null, tokExp = 0;
