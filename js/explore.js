@@ -1,5 +1,5 @@
 /* Identity explorer: search images / palettes / icons / fonts INSIDE the app and pin results to the project's visual identity.
-   Images come only from well-known stock sites (Pexels / Unsplash / Pixabay) once you paste your own free key; Iconify and Google Fonts work with no setup;
+   Images come only from well-known stock sites (Pexels / Unsplash / Pixabay / Flickr / Freepik) once you paste your own free key; Iconify and Google Fonts work with no setup;
    Pexels / Unsplash / Pixabay appear when you paste your own free API key in Settings → Connectors. */
 (function(){
 const MSA = window.MSA, U = MSA.u, I = MSA.icon, $ = MSA.$, $$ = MSA.$$;
@@ -32,7 +32,16 @@ const SRC = [
       return (j.results || []).map(x => ({ id: 'us' + x.id, thumb: x.urls.small, full: x.urls.regular, title: x.alt_description || '', credit: x.user && x.user.name || '', page: x.links && x.links.html, src: 'Unsplash' })); } },
   { id: 'pixabay', name: 'Pixabay', c: '#2ec66d', key: true, note: T('صور وفيكتور — تحتاج مفتاح مجاني', 'Photos & vectors — free key needed'),
     async get(q, pg){ const j = await fx('https://pixabay.com/api/?key=' + enc(keys().pixabay) + '&q=' + enc(q) + '&per_page=24&page=' + pg + '&safesearch=true');
-      return (j.hits || []).map(x => ({ id: 'pb' + x.id, thumb: x.webformatURL, full: x.largeImageURL || x.webformatURL, title: x.tags || '', credit: x.user || '', page: x.pageURL, src: 'Pixabay' })); } }
+      return (j.hits || []).map(x => ({ id: 'pb' + x.id, thumb: x.webformatURL, full: x.largeImageURL || x.webformatURL, title: x.tags || '', credit: x.user || '', page: x.pageURL, src: 'Pixabay' })); } },
+  { id: 'flickr', name: 'Flickr', c: '#ff0084', key: true, note: T('صور مصوّرين بترخيص مفتوح — تحتاج مفتاح مجاني', 'Photographers\u2019 openly licensed photos — free key needed'),
+    async get(q, pg){ const j = await fx('https://www.flickr.com/services/rest/?method=flickr.photos.search&api_key=' + enc(keys().flickr) + '&text=' + enc(q) + '&format=json&nojsoncallback=1&per_page=24&page=' + pg + '&safe_search=1&sort=relevance&media=photos&content_type=1&license=1,2,3,4,5,6,9,10&extras=url_m,url_l,url_c,owner_name');
+      if (j.stat && j.stat !== 'ok') throw new Error(j.message || 'flickr');
+      return ((j.photos && j.photos.photo) || []).filter(x => x.url_m).map(x => ({ id: 'fl' + x.id, thumb: x.url_m, full: x.url_l || x.url_c || x.url_m, title: x.title || '', credit: x.ownername || '', page: 'https://www.flickr.com/photos/' + x.owner + '/' + x.id, src: 'Flickr' })); } },
+  { id: 'freepik', name: 'Freepik', c: '#1273eb', key: true, note: T('فيكتور وصور وPSD — تحتاج مفتاح مجاني', 'Vectors, photos, PSD — free key needed'),
+    async get(q, pg){
+      const qs = '/v1/resources?term=' + enc(q) + '&page=' + pg + '&limit=24&filters%5Blicense%5D%5Bfreemium%5D=1';
+      let j; try { j = await fx('https://api.freepik.com' + qs, { headers: { 'x-freepik-api-key': keys().freepik } }); } catch (e) { j = await fx('https://api.magnific.com' + qs, { headers: { 'x-magnific-api-key': keys().freepik } }); }
+      return (j.data || []).filter(x => x.image && x.image.source && x.image.source.url).map(x => ({ id: 'fp' + x.id, thumb: x.image.source.url, full: x.image.source.url, title: x.title || '', credit: (x.author && x.author.name) || '', page: x.url || '', src: 'Freepik' })); } }
 ];
 const srcOn = s => !conn.state().off[s.id] && (!s.key || (keys()[s.id] || '').trim());
 const chosen = () => { const u = S().ui; let sel = u.exSrc; const av = SRC.filter(srcOn).map(s => s.id); sel = (sel || []).filter(x => av.includes(x)); if (!sel.length) sel = av.slice(0, 1); return sel; };
@@ -86,7 +95,7 @@ function open(p, o){
   root.addEventListener('click', onClick);
   root.addEventListener('input', onInput);
   root.addEventListener('change', onInput);
-  root.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-ex-q]')) { e.preventDefault(); run(true); } });
+  root.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-ex-q]')) { e.preventDefault(); if (cur.tab === 'sites') { const g = $('[data-ex=site-go]', cur.root); if (g) g.click(); } else run(true); } });
   m.el.addEventListener('paste', onPaste);
   if (cur.tab === 'images' && cur.q) run(true); else if (cur.tab === 'icons') runIcons();
   const bg = $('.mb', m.el); if (bg) bg.style.overflow = 'auto';
@@ -94,7 +103,7 @@ function open(p, o){
 const countId = p => { const i = p.identity; return i ? i.colors.length + i.fonts.length + i.icons.length + i.notes.length + (i.images || []).length : 0; };
 function draw(){
   const { root, tab } = cur; if (!root || !document.body.contains(root)) return;
-  const tabs = [['images', 'image', T('صور وإلهام', 'Images & inspiration')], ['colors', 'palette', T('ألوان', 'Colours')], ['icons', 'star', T('أيقونات', 'Icons')], ['fonts', 'heading', T('خطوط', 'Fonts')]];
+  const tabs = [['images', 'image', T('صور وإلهام', 'Images & inspiration')], ['colors', 'palette', T('ألوان', 'Colours')], ['icons', 'star', T('أيقونات', 'Icons')], ['fonts', 'heading', T('خطوط', 'Fonts')], ['sites', 'globe', T('مواقع مشهورة', 'Famous sites')]];
   root.innerHTML = '<div class="ex-top"><div class="ex-tabs" role="tablist">' + tabs.map(x => '<button data-ex-tab="' + x[0] + '" class="' + (tab === x[0] ? 'on' : '') + '">' + I(x[1], 'sm') + '<span>' + esc(x[2]) + '</span></button>').join('') + '</div>' +
     '<button class="btn sm" data-ex="identity">' + I('pin', 'sm') + '<span>' + esc(T('هويتي', 'My identity')) + '</span><b class="cnt" id="exCnt">' + countId(cur.p) + '</b></button></div>' +
     '<div class="ex-body" id="exBody"></div>';
@@ -102,9 +111,60 @@ function draw(){
 }
 function drawBody(){
   const b = $('#exBody', cur.root); if (!b) return;
-  ({ images: bodyImages, colors: bodyColors, icons: bodyIcons, fonts: bodyFonts })[cur.tab](b);
+  ({ images: bodyImages, colors: bodyColors, icons: bodyIcons, fonts: bodyFonts, sites: bodySites })[cur.tab](b);
 }
 const upd = () => { const c = $('#exCnt', cur.root); if (c) c.textContent = countId(cur.p); };
+
+/* ----- famous sites (Pinterest, Behance, Freepik …) ----- */
+const SITE_IDS = ['pinterest', 'behance', 'freepik', 'dribbble', 'artstation', 'unsplash', 'pexels', 'pixabay', 'flickr', 'adobestock', 'shutterstock', 'vecteezy', 'envato', 'awwwards', 'flaticon', 'canva'];
+const isDesk = () => !!(window.msaDesktop && window.msaDesktop.webview);
+const siteList = () => conn.all.filter(x => SITE_IDS.includes(x.id) && !conn.state().off[x.id]);
+const siteHref = (x, q) => x.url(enc(q || ''), {});
+function bodySites(b){
+  const list = siteList(); if (!list.length) { b.innerHTML = MSA.empty('globe', T('كل المواقع مقفولة', 'All sites are turned off'), T('فعّلها من الإعدادات ← الموصّلات', 'Turn them on in Settings → Connectors')); return; }
+  if (!cur.site || !list.find(x => x.id === cur.site)) cur.site = list[0].id;
+  const desk = isDesk(), site = list.find(x => x.id === cur.site);
+  b.innerHTML = '<div class="ex-search"><input type="text" dir="auto" data-ex-q value="' + esc(cur.q) + '" placeholder="' + esc(T('اكتب ما تبحث عنه ثم اختار الموقع', 'Type what you are after, then pick a site')) + '"><button class="btn primary" data-ex="site-go">' + I('search', 'sm') + '<span>' + esc(T('بحث', 'Search')) + '</span></button></div>' +
+    '<div class="ex-srcs">' + list.map(x => '<button class="ex-src ' + (cur.site === x.id ? 'on' : '') + '" data-ex-site="' + x.id + '" style="--c:' + x.c + '"><i></i>' + esc(x.name) + '</button>').join('') + '</div>' +
+    (desk
+      ? '<div class="ex-web"><div class="ex-wbar" dir="ltr"><button class="icon-btn sm" data-ex="wv-back" title="Back">' + I('arrow-l', 'sm') + '</button><button class="icon-btn sm" data-ex="wv-fwd" title="Forward">' + I('arrow-r', 'sm') + '</button><button class="icon-btn sm" data-ex="wv-reload" title="Reload">' + I('repeat', 'sm') + '</button><span class="ex-wurl" id="exWurl"></span><button class="icon-btn sm" data-ex="wv-ext" title="' + esc(T('افتح في المتصفح', 'Open in browser')) + '">' + I('external', 'sm') + '</button></div>' +
+        '<webview id="exWv" class="ex-wv" partition="persist:msa-sites" allowpopups src="about:blank"></webview>' +
+        '<div class="hint" style="margin-top:6px">' + esc(T('كليك يمين على أي صورة ← «تثبيت في هويتي» تحفظها في المشروع وتثبّتها في الهوية. تسجيل دخولك في المواقع بيتحفظ على جهازك.', 'Right-click any image → “Pin to my identity” saves it to the project and pins it to the identity. Your site logins stay on this device.')) + '</div></div>'
+      : '<div class="ex-nokey" style="margin-top:6px"><b>' + esc(T('افتح الموقع بكلمة بحثك', 'Open the site with your search')) + '</b><span>' + esc(T('اضغط اسم الموقع وهيفتح بنفس كلمة البحث (على الأندرويد جوا التطبيق، وعلى المتصفح في تبويب جديد). انسخ الصورة أو رابطها وارجع الصقها في تبويب «صور وإلهام» (Ctrl+V). والعرض المدمج الكامل للمواقع متاح في نسخة الكمبيوتر.', 'Tap a site and it opens with your search (inside the app on Android, in a new tab on the web). Copy the image or its link and paste it in the “Images & inspiration” tab (Ctrl+V). The full embedded view is in the desktop app.')) + '</span></div>');
+  if (desk) wvGo(true);
+}
+function wvEl(){ return cur.root && $('#exWv', cur.root); }
+function wvGo(first){
+  const wv = wvEl(); if (!wv) return;
+  const x = siteList().find(s => s.id === cur.site); if (!x) return;
+  const url = (first && cur.siteUrl && cur.siteUrlFor === cur.site && !cur.siteFresh) ? cur.siteUrl : siteHref(x, cur.q);
+  cur.siteFresh = false;
+  if (!wv.__wired) {
+    wv.__wired = true;
+    const show = () => { const u = $('#exWurl', cur.root); try { cur.siteUrl = wv.getURL(); cur.siteUrlFor = cur.site; if (u) u.textContent = cur.siteUrl; } catch (e) {} };
+    wv.addEventListener('did-navigate', show); wv.addEventListener('did-navigate-in-page', show);
+    wv.addEventListener('did-fail-load', ev => { if (ev.errorCode !== -3 && ev.isMainFrame) { const u = $('#exWurl', cur.root); if (u) u.textContent = T('تعذّر التحميل — تأكد من الإنترنت', 'Could not load — check your internet'); } });
+  }
+  wv.setAttribute('src', url);
+  const u = $('#exWurl', cur.root); if (u) u.textContent = url;
+}
+function wvCmd(c){
+  const wv = wvEl(); if (!wv) return;
+  try { if (c === 'back' && wv.canGoBack()) wv.goBack(); else if (c === 'fwd' && wv.canGoForward()) wv.goForward(); else if (c === 'reload') wv.reload(); else if (c === 'ext') MSA.openLink(wv.getURL()); } catch (e) {}
+}
+/* right-click → "Pin to my identity" in the embedded browser (desktop app sends the image bytes) */
+if (window.msaDesktop && window.msaDesktop.onWebImage) window.msaDesktop.onWebImage(async d => {
+  try {
+    if (!cur.root || !document.body.contains(cur.root) || !cur.p) { MSA.toast(T('افتح مستكشف الهوية البصرية الأول', 'Open the visual identity explorer first'), 'err'); return; }
+    const bin = atob(d.b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const mime = /^image\//.test(d.mime || '') ? d.mime : 'image/jpeg', ext = (mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '').slice(0, 5) || 'jpg';
+    let host = ''; try { host = new URL(d.page || d.src).hostname.replace(/^www\./, ''); } catch (e) {}
+    const st = targetStep(); let where = '';
+    if (st) { const a = await MSA.files.put(new File([u8], 'web-' + Date.now() + '.' + ext, { type: mime })); a.kind = 'image'; st.atts.push(a); MSA.save(); MSA.updateCounts && MSA.updateCounts(); where = P.title(st); }
+    pinTo('image', { thumb: d.src, full: d.src, title: '', credit: host, page: d.page || '', src: host || 'web' });
+    MSA.toast(where ? T('تم التثبيت في الهوية وحفظ الصورة في «' + where + '»', 'Pinned to the identity and saved to “' + where + '”') : T('تم التثبيت في الهوية', 'Pinned to the identity'), 'ok');
+  } catch (e) { MSA.toast(T('تعذّر حفظ الصورة', 'Could not save the image'), 'err'); }
+});
 
 /* ----- images ----- */
 function bodyImages(b){
@@ -112,7 +172,7 @@ function bodyImages(b){
   b.innerHTML = '<div class="ex-search"><input type="text" dir="auto" data-ex-q value="' + esc(cur.q) + '" placeholder="' + esc(T('اكتب ما تبحث عنه: قهوة فاخرة، خط عربي، تغليف…', 'Search: luxury coffee, arabic calligraphy, packaging…')) + '"><button class="btn primary" data-ex="search">' + I('search', 'sm') + '<span>' + esc(T('بحث', 'Search')) + '</span></button></div>' +
     '<div class="ex-srcs">' + avail.map(s => '<button class="ex-src ' + (sel.includes(s.id) ? 'on' : '') + '" data-ex-src="' + s.id + '" style="--c:' + s.c + '" title="' + esc(s.note) + '"><i></i>' + esc(s.name) + '</button>').join('') +
       (locked.length ? '<span class="ex-lock">' + I('key', 'xs') + esc(T('أضف مفتاح ', 'Add a key for ')) + locked.map(s => s.name).join(' / ') + esc(T(' من الإعدادات ← الموصّلات', ' in Settings → Connectors')) + '</span>' : '') + '</div>' +
-    (avail.length ? '' : '<div class="ex-nokey"><b>' + esc(T('مفيش مصدر صور مفعّل', 'No image source is active')) + '</b><span>' + esc(T('الصور بتيجي من Pexels وUnsplash وPixabay بعد ما تلصق مفتاحك المجاني (من الإعدادات ← الموصّلات). وفي نفس الوقت تقدر تفتح المواقع دي مباشرة، والصق الصورة أو رابطها هنا:', 'Images come from Pexels, Unsplash and Pixabay once you paste your free key (Settings → Connectors). Meanwhile open these sites directly, then paste the image or its link here:')) + '</span><div class="row" style="flex-wrap:wrap;gap:6px">' + conn.links('main', cur.q).filter(l => l.id !== 'youtube').map(l => '<button class="cchip" data-open="' + esc(l.url) + '" style="--c:' + l.c + '">' + conn.logo(l) + esc(l.name) + I('external', 'xs') + '</button>').join('') + '</div></div>') +
+    (avail.length ? '' : '<div class="ex-nokey"><b>' + esc(T('مفيش مصدر صور مفعّل', 'No image source is active')) + '</b><span>' + esc(T('الصور بتيجي من Pexels وUnsplash وPixabay وFlickr وFreepik بعد ما تلصق مفتاحك المجاني (من الإعدادات ← الموصّلات). وفي نفس الوقت تقدر تفتح المواقع دي مباشرة، والصق الصورة أو رابطها هنا:', 'Images come from Pexels, Unsplash, Pixabay, Flickr and Freepik once you paste your free key (Settings → Connectors). Meanwhile open these sites directly, then paste the image or its link here:')) + '</span><div class="row" style="flex-wrap:wrap;gap:6px">' + conn.links('main', cur.q).filter(l => l.id !== 'youtube').map(l => '<button class="cchip" data-open="' + esc(l.url) + '" style="--c:' + l.c + '">' + conn.logo(l) + esc(l.name) + I('external', 'xs') + '</button>').join('') + '</div></div>') +
     '<div class="ex-tools"><div class="ex-url"><input type="text" dir="auto" data-ex-url placeholder="' + esc(T('الصق رابط صورة (من Pinterest أو Behance…) أو اضغط Ctrl+V للصق صورة منسوخة', 'Paste an image link (from Pinterest, Behance…) or press Ctrl+V to paste a copied image')) + '"><button class="btn sm" data-ex="addurl">' + I('plus', 'sm') + '<span>' + esc(T('إضافة', 'Add')) + '</span></button></div></div>' +
     '<div id="exRes"></div>';
   drawRes();
@@ -138,7 +198,7 @@ async function run(reset){
   if (reset) { cur.page = 1; cur.items = []; cur.errs = []; cur.searched = true; } else cur.page++;
   cur.busy = true; const tok = cur.tok = (cur.tok || 0) + 1; drawRes();
   const sel = SRC.filter(s => chosen().includes(s.id));
-  if (!sel.length) { cur.busy = false; cur.searched = false; cur.errs = [T('مفيش مصدر صور مفعّل — أضف مفتاح Pexels أو Unsplash أو Pixabay من الإعدادات ← الموصّلات', 'No image source is active — add a Pexels, Unsplash or Pixabay key in Settings → Connectors')]; drawRes(); return; }
+  if (!sel.length) { cur.busy = false; cur.searched = false; cur.errs = [T('مفيش مصدر صور مفعّل — أضف مفتاح Pexels أو Unsplash أو Pixabay أو Flickr أو Freepik من الإعدادات ← الموصّلات', 'No image source is active — add a Pexels, Unsplash, Pixabay, Flickr or Freepik key in Settings → Connectors')]; drawRes(); return; }
   const res = await Promise.allSettled(sel.map(s => s.get(q, cur.page)));
   if (tok !== cur.tok || !document.body.contains(cur.root)) return;
   const lists = []; cur.more = false;
@@ -285,12 +345,16 @@ function onInput(e){
 }
 async function onClick(e){
   const tab = e.target.closest('[data-ex-tab]'); if (tab) { cur.tab = tab.dataset.exTab; S().ui.exTab = cur.tab; cur.tok++; cur.busy = false; draw(); if (cur.tab === 'icons' && !cur.icons.length) { if (!cur.iconQ) cur.iconQ = cur.q; runIcons(); } return; }
+  const site = e.target.closest('[data-ex-site]');
+  if (site) { const x = siteList().find(z => z.id === site.dataset.exSite); if (!x) return; cur.site = x.id; cur.siteFresh = true; const q = ($('[data-ex-q]', cur.root) || {}).value; if (q != null) cur.q = q.trim(); if (isDesk()) { $$('[data-ex-site]', cur.root).forEach(bn => bn.classList.toggle('on', bn === site)); wvGo(false); } else MSA.openLink(siteHref(x, cur.q)); return; }
   const sr = e.target.closest('[data-ex-src]'); if (sr) { let sel = chosen(); const id = sr.dataset.exSrc; sel = sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id]; if (!sel.length) sel = [id]; S().ui.exSrc = sel; MSA.save(); drawBody(); if (cur.q && cur.searched) run(true); return; }
   const md = e.target.closest('[data-ex-mode]'); if (md) { cur.mode = md.dataset.exMode; drawBody(); return; }
   const fs = e.target.closest('[data-ex-fs]'); if (fs) { cur.fscope = fs.dataset.exFs; cur.fshow = 24; drawBody(); return; }
   const fc = e.target.closest('[data-ex-fc]'); if (fc) { cur.fcat = fc.dataset.exFc; cur.fshow = 24; drawBody(); return; }
   const b = e.target.closest('[data-ex]'); if (!b) return; const a = b.dataset.ex, it = b.dataset.i != null ? cur.items[+b.dataset.i] : null;
-  if (a === 'search') { if (cur.tab === 'icons') runIcons(); else run(true); }
+  if (a === 'site-go') { const q = ($('[data-ex-q]', cur.root) || {}).value; if (q != null) cur.q = q.trim(); const x = siteList().find(z => z.id === cur.site); if (!x) return; cur.siteFresh = true; if (isDesk()) wvGo(false); else MSA.openLink(siteHref(x, cur.q)); }
+  else if (a.slice(0, 3) === 'wv-') wvCmd(a.slice(3));
+  else if (a === 'search') { if (cur.tab === 'icons') runIcons(); else run(true); }
   else if (a === 'more') run(false);
   else if (a === 'view' && it) view(it);
   else if (a === 'pinimg' && it) pinTo('image', imgRec(it));
@@ -315,7 +379,9 @@ MSA.explore = { open, sources: SRC, keys };
 const KEYSRC = [
   ['pexels', 'Pexels', 'https://www.pexels.com/api/', ['افتح الرابط واضغط «Get Started» ثم سجّل بإيميلك', 'أكّد الإيميل واكتب وصفًا بسيطًا لاستخدامك (تطبيق شخصي لتصميم الهوية)', 'يظهر مفتاحك فورًا في صفحة الـ API — انسخه والصقه هنا'], ['Open the link and press “Get Started”, sign up with your email', 'Confirm the email and describe your use (a personal brand-design app)', 'Your key appears right away on the API page — copy it and paste it here']],
   ['unsplash', 'Unsplash (Access Key)', 'https://unsplash.com/developers', ['سجّل حسابًا ثم افتح «Your apps» ← «New Application»', 'وافق على الشروط وسمِّ التطبيق', 'انسخ «Access Key» (وليس Secret) والصقه هنا'], ['Create an account, open “Your apps” → “New Application”', 'Accept the terms and name the app', 'Copy the “Access Key” (not the Secret) and paste it here']],
-  ['pixabay', 'Pixabay', 'https://pixabay.com/api/docs/', ['سجّل حسابًا مجانيًا ثم افتح صفحة الـ API docs وأنت داخل حسابك', 'سيظهر مفتاحك أعلى الصفحة في المثال الأول (key=…)', 'انسخه والصقه هنا'], ['Create a free account, then open the API docs while logged in', 'Your key shows in the first example (key=…)', 'Copy it and paste it here']]
+  ['pixabay', 'Pixabay', 'https://pixabay.com/api/docs/', ['سجّل حسابًا مجانيًا ثم افتح صفحة الـ API docs وأنت داخل حسابك', 'سيظهر مفتاحك أعلى الصفحة في المثال الأول (key=…)', 'انسخه والصقه هنا'], ['Create a free account, then open the API docs while logged in', 'Your key shows in the first example (key=…)', 'Copy it and paste it here']],
+  ['flickr', 'Flickr', 'https://www.flickr.com/services/apps/create/apply/', ['سجّل دخول بحساب Flickr (أو Yahoo) وافتح الرابط', 'اختار «Apply for a Non-Commercial Key» وسمِّ التطبيق واكتب وصفًا بسيطًا', 'انسخ «Key» (وليس Secret) والصقه هنا'], ['Sign in with a Flickr (or Yahoo) account and open the link', 'Choose “Apply for a Non-Commercial Key”, name the app and add a short description', 'Copy the “Key” (not the Secret) and paste it here']],
+  ['freepik', 'Freepik', 'https://www.freepik.com/api', ['افتح الرابط وسجّل حسابًا ثم اطلب مفتاح API من لوحة المطوّرين', 'انسخ المفتاح والصقه هنا', 'الصور اللي بترجع هي الحرّة (Freemium) وبتحتاج إسناد للمصمّم'], ['Open the link, sign up and request an API key from the developer dashboard', 'Copy the key and paste it here', 'Results are the free (Freemium) ones and need author credit']]
 ];
 MSA.exploreSettingsHTML = function(){
   const k = keys();
@@ -324,7 +390,7 @@ MSA.exploreSettingsHTML = function(){
       '<div class="row"><input type="password" dir="ltr" autocomplete="off" class="grow" data-exkey="' + id + '" value="' + esc(k[id] || '') + '" placeholder="API key"><button class="btn sm" data-open="' + esc(url) + '">' + I('external', 'sm') + '<span>' + esc(T('سجّل واحصل على المفتاح', 'Sign up & get key')) + '</span></button></div>' +
       '<details class="ksteps"><summary>' + esc(T('الخطوات بالتفصيل', 'Step by step')) + '</summary><ol>' + (lang2() === 'en' ? enn : ar).map(s => '<li>' + esc(s) + '</li>').join('') + '</ol></details></div>'; };
   return '<div class="subsec" style="margin-top:12px"><div class="f-title">' + I('search', 'sm') + esc(T('مصادر الهوية البصرية داخل البرنامج', 'In-app visual identity sources')) + '</div>' +
-    '<div class="hint" style="margin-bottom:8px">' + esc(T('الصور من مواقع الستوك المعروفة بس: Pexels وUnsplash وPixabay (الصق مفتاحك المجاني من الأسفل). وتعمل بدون أي إعداد: Iconify (أيقونات وشعارات ماركات)، وGoogle Fonts وFontsource (خطوط)، وTheColorAPI (أسماء الألوان). المفاتيح تُحفظ على جهازك فقط ولا تدخل النسخ الاحتياطي. Behance وPinterest وFreepik وDribbble لا تسمح بعرض محتواها داخل تطبيقات أخرى، فبتفتح في المتصفح من أزرار المواقع، وانسخ الصورة والصقها (Ctrl+V) داخل المستكشف.', 'Images come only from well-known stock sites: Pexels, Unsplash and Pixabay (paste your free key below). Work with no setup: Iconify (icons & brand logos), Google Fonts and Fontsource (fonts), TheColorAPI (colour names). Keys stay on this device and are left out of backups. Behance, Pinterest, Freepik and Dribbble do not allow their content inside other apps, so they open in your browser from the site buttons; copy an image there and paste it (Ctrl+V) into the explorer.')) + '</div>' +
+    '<div class="hint" style="margin-bottom:8px">' + esc(T('الصور من مواقع الستوك المعروفة بس: Pexels وUnsplash وPixabay وFlickr وFreepik (الصق مفتاحك المجاني من الأسفل). وتعمل بدون أي إعداد: Iconify (أيقونات وشعارات ماركات)، وGoogle Fonts وFontsource (خطوط)، وTheColorAPI (أسماء الألوان). المفاتيح تُحفظ على جهازك فقط ولا تدخل النسخ الاحتياطي. Behance وPinterest وFreepik وDribbble لا تسمح بعرض محتواها داخل تطبيقات أخرى، فبتفتح في المتصفح من أزرار المواقع، وانسخ الصورة والصقها (Ctrl+V) داخل المستكشف.', 'Images come only from well-known stock sites: Pexels, Unsplash, Pixabay, Flickr and Freepik (paste your free key below). Work with no setup: Iconify (icons & brand logos), Google Fonts and Fontsource (fonts), TheColorAPI (colour names). Keys stay on this device and are left out of backups. Behance, Pinterest, Freepik and Dribbble do not allow their content inside other apps, so they open in your browser from the site buttons; copy an image there and paste it (Ctrl+V) into the explorer.')) + '</div>' +
     KEYSRC.map(row).join('') + '</div>';
 };
 const lang2 = () => (S().settings.lang === 'en' ? 'en' : 'ar');

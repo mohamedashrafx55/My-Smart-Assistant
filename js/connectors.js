@@ -20,6 +20,14 @@ const LINKS = [
   { id: 'noun', name: 'The Noun Project', c: '#1d1d1d', sc: ['icons'], url: q => 'https://thenounproject.com/search/icons/?q=' + q },
   { id: 'freepik', name: 'Freepik', c: '#1273eb', sc: ['icons', 'imagestyle', 'templates', 'mockups', 'main'], url: q => 'https://www.freepik.com/search?query=' + q },
   { id: 'canva', name: 'Canva', c: '#00c4cc', sc: ['templates', 'static', 'main'], url: q => 'https://www.canva.com/templates/?query=' + q },
+  { id: 'pixabay', name: 'Pixabay', c: '#2ec66d', sc: ['mood', 'imagestyle', 'icons'], url: q => 'https://pixabay.com/images/search/' + q + '/' },
+  { id: 'flickr', name: 'Flickr', c: '#ff0084', sc: ['mood', 'imagestyle'], url: q => 'https://www.flickr.com/search/?text=' + q },
+  { id: 'artstation', name: 'ArtStation', c: '#13aff0', sc: ['idea', 'mood', 'static', 'motion'], url: q => 'https://www.artstation.com/search?sort_by=relevance&query=' + q },
+  { id: 'adobestock', name: 'Adobe Stock', c: '#ff0000', sc: ['imagestyle', 'mockups', 'templates'], url: q => 'https://stock.adobe.com/search?k=' + q },
+  { id: 'shutterstock', name: 'Shutterstock', c: '#ee2b24', sc: ['imagestyle', 'mockups'], url: q => 'https://www.shutterstock.com/search/' + q.replace(/%20/g, '-') },
+  { id: 'vecteezy', name: 'Vecteezy', c: '#fe6e00', sc: ['icons', 'imagestyle', 'templates', 'mockups'], url: q => 'https://www.vecteezy.com/free-vector/' + q.replace(/%20/g, '-') },
+  { id: 'envato', name: 'Envato Elements', c: '#82b541', sc: ['templates', 'mockups', 'motion'], url: q => 'https://elements.envato.com/all-items/' + q.replace(/%20/g, '-') },
+  { id: 'awwwards', name: 'Awwwards', c: '#222222', sc: ['idea', 'mood'], url: q => 'https://www.awwwards.com/websites/?text=' + q },
   { id: 'youtube', name: 'YouTube', c: '#ff0000', sc: ['*'], url: q => 'https://www.youtube.com/results?search_query=' + q + '%20tutorial' }
 ];
 function st(){

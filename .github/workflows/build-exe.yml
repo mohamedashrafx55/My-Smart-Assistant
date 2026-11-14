@@ -60,7 +60,7 @@ jobs:
           JSON
           cat > preload.js <<'JS'
           const { contextBridge, ipcRenderer } = require('electron');
-          contextBridge.exposeInMainWorld('msaDesktop', { installUpdate: (url) => ipcRenderer.invoke('msa-update', url), onUpdateProgress: (cb) => { ipcRenderer.removeAllListeners('msa-update-progress'); ipcRenderer.on('msa-update-progress', (_e, p) => { try { cb(p); } catch (e) {} }); } });
+          contextBridge.exposeInMainWorld('msaDesktop', { webview: true, onWebImage: (cb) => { ipcRenderer.removeAllListeners('msa-web-image'); ipcRenderer.on('msa-web-image', (_e, d) => { try { cb(d); } catch (e) {} }); }, installUpdate: (url) => ipcRenderer.invoke('msa-update', url), onUpdateProgress: (cb) => { ipcRenderer.removeAllListeners('msa-update-progress'); ipcRenderer.on('msa-update-progress', (_e, p) => { try { cb(p); } catch (e) {} }); } });
           JS
           node --check preload.js
           cat > main.js <<'JS'
@@ -89,9 +89,15 @@ jobs:
               autoHideMenuBar: true,
               backgroundColor: '#0f0f10',
               icon: path.join(__dirname, 'www/icons/icon-512.png'),
-              webPreferences: { backgroundThrottling: false, contextIsolation: true, nodeIntegration: false, spellcheck: false, preload: path.join(__dirname, 'preload.js') }
+              webPreferences: { backgroundThrottling: false, contextIsolation: true, nodeIntegration: false, spellcheck: false, webviewTag: true, preload: path.join(__dirname, 'preload.js') }
             });
             win.setMenuBarVisibility(false);
+            win.webContents.on('will-attach-webview', (e, webPreferences, params) => {
+              delete webPreferences.preload; delete webPreferences.preloadURL;
+              webPreferences.nodeIntegration = false; webPreferences.contextIsolation = true; webPreferences.webSecurity = true;
+              params.partition = 'persist:msa-sites';
+              if (params.src && params.src !== 'about:blank' && !/^https?:/i.test(params.src)) e.preventDefault();
+            });
             win.loadFile(path.join(__dirname, 'www/index.html'));
             win.webContents.setWindowOpenHandler(({ url }) => {
               if (/^(https?|mailto|tel):/i.test(url)) shell.openExternal(url);
@@ -102,6 +108,41 @@ jobs:
             });
             win.on('close', (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });
           }
+
+          /* embedded sites browser (Pinterest, Behance, Freepik …): hardened <webview> + right-click "Pin to my identity" */
+          const AR = /^ar/i.test(app.getLocale());
+          const L = (ar, en) => (AR ? ar : en);
+          async function sendWebImage(contents, src) {
+            try {
+              if (!/^https?:/i.test(src || '') || !win || win.isDestroyed()) return;
+              const res = await net.fetch(src, { headers: { Referer: contents.getURL() } });
+              if (!res.ok) return;
+              const buf = Buffer.from(await res.arrayBuffer());
+              if (!buf.length || buf.length > 15 * 1024 * 1024) return;
+              win.webContents.send('msa-web-image', { src, page: contents.getURL(), mime: res.headers.get('content-type') || '', b64: buf.toString('base64') });
+            } catch (e) {}
+          }
+          app.on('web-contents-created', (_e, contents) => {
+            if (contents.getType() === 'webview') {
+              contents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) contents.loadURL(url); return { action: 'deny' }; });
+              contents.on('context-menu', (_ev, params) => {
+                const items = [];
+                if (params.mediaType === 'image' && params.srcURL) {
+                  items.push({ label: L('تثبيت في هويتي', 'Pin to my identity'), click: () => sendWebImage(contents, params.srcURL) });
+                  items.push({ label: L('نسخ الصورة', 'Copy image'), click: () => contents.copyImageAt(params.x, params.y) });
+                  items.push({ label: L('نسخ رابط الصورة', 'Copy image address'), click: () => require('electron').clipboard.writeText(params.srcURL) });
+                  items.push({ type: 'separator' });
+                }
+                if (params.linkURL && /^https?:/i.test(params.linkURL)) items.push({ label: L('نسخ رابط الصفحة', 'Copy link address'), click: () => require('electron').clipboard.writeText(params.linkURL) });
+                if (contents.navigationHistory ? contents.navigationHistory.canGoBack() : contents.canGoBack()) items.push({ label: L('رجوع', 'Back'), click: () => (contents.navigationHistory ? contents.navigationHistory.goBack() : contents.goBack()) });
+                items.push({ label: L('تحديث', 'Reload'), click: () => contents.reload() });
+                items.push({ label: L('فتح في المتصفح', 'Open in browser'), click: () => { const u = contents.getURL(); if (/^https?:/i.test(u)) shell.openExternal(u); } });
+                const menu = Menu.buildFromTemplate(items);
+                global.__msaWebMenu = menu;
+                menu.popup();
+              });
+            }
+          });
 
           /* in-app update: download the installer from this project's GitHub Releases and start it */
           ipcMain.handle('msa-update', async (e, url) => {
