@@ -107,7 +107,7 @@ function openVideo(v){
   MSA.modal({
     title: titleOf(v), size: 'wide',
     body: player + '<div class="row" style="margin:12px 0"><button class="btn primary" id="vOpen">' + I('external', 'sm') + U.esc(t(yt ? 'openYoutube' : 'openLink')) + '</button><button class="btn" id="vCopy">' + I('copy', 'sm') + U.esc(t('copyLink')) + '</button></div>' +
-      '<div class="field" style="margin:0"><label class="f">' + U.esc(t('lessonNotes')) + '</label><textarea id="vNote" placeholder="' + U.esc(t('lessonNotesPh')) + '">' + U.esc(v.note || '') + '</textarea></div>',
+      (yt ? '<div class="hint" style="margin:-4px 0 10px">' + U.esc(MSA.T('لو الفيديو مش بيشتغل هنا (خطأ 153 أو غيره) اضغط «فتح على يوتيوب».', 'If the video will not play here (error 153 etc.) press “Open on YouTube”.')) + '</div>' : '') + '<div class="field" style="margin:0"><label class="f">' + U.esc(t('lessonNotes')) + '</label><textarea id="vNote" placeholder="' + U.esc(t('lessonNotesPh')) + '">' + U.esc(v.note || '') + '</textarea></div>',
     footer: false,
     onMount: el => {
       $('#vOpen', el).onclick = () => MSA.openLink(v.url);

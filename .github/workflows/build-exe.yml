@@ -189,6 +189,12 @@ jobs:
 
           app.whenReady().then(() => {
             Menu.setApplicationMenu(null);
+            /* YouTube embeds fail with "Error 153" when the page has no web origin (file://). Send a normal https Referer for the embed frames only. */
+            try {
+              require('electron').session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['https://www.youtube-nocookie.com/*', 'https://www.youtube.com/embed/*'] }, (details, cb) => {
+                const h = details.requestHeaders; h['Referer'] = 'https://mohamedashrafx55.github.io/My-Smart-Assistant/'; cb({ requestHeaders: h });
+              });
+            } catch (e) {}
             createWindow();
 
             const flag = path.join(app.getPath('userData'), 'init.flag');
