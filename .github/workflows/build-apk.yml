@@ -36,7 +36,7 @@ jobs:
         working-directory: build
         run: |
           cat > capacitor.config.json <<'JSON'
-          {"appId":"com.mysmartassistant.app","appName":"My Smart Assistant","webDir":"www","server":{"androidScheme":"https"}}
+          {"appId":"com.mysmartassistant.app","appName":"My Smart Assistant","webDir":"www","server":{"androidScheme":"https"},"plugins":{"LocalNotifications":{"smallIcon":"ic_stat_msa","iconColor":"#5b8def"}}}
           JSON
           npm init -y
           npm install --no-audit --no-fund --legacy-peer-deps @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/app@6 @capacitor/browser@6 @capacitor/filesystem@6 @capacitor/share@6 @capacitor/local-notifications@6 @capacitor/clipboard@6 @capacitor/app-launcher@6
@@ -87,6 +87,14 @@ jobs:
               b = Image.new('RGBA', (legacy, legacy), (0, 0, 0, 0)); b.paste(sq, (0, 0), m2); b.save(p + '/ic_launcher_round.png')
           os.makedirs(res + '/values', exist_ok=True)
           open(res + '/values/ic_launcher_background.xml', 'w').write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#222222</color>\n</resources>\n')
+          # notification icons: a white silhouette status-bar icon (Android tints it) + a coloured large icon
+          bb = fg.split()[3].getbbox(); c = fg.crop(bb); w, h = c.size; sd = max(w, h)
+          sq = Image.new('RGBA', (sd, sd), (0, 0, 0, 0)); sq.paste(c, ((sd - w) // 2, (sd - h) // 2))
+          wh = Image.new('RGBA', sq.size, (255, 255, 255, 0)); wh.putalpha(sq.split()[3])
+          for d, px in {'mdpi': 24, 'hdpi': 36, 'xhdpi': 48, 'xxhdpi': 72, 'xxxhdpi': 96}.items():
+              p = '%s/drawable-%s' % (res, d); os.makedirs(p, exist_ok=True)
+              ic = Image.new('RGBA', (px, px), (0, 0, 0, 0)); inner = wh.resize((px - 2, px - 2), Image.LANCZOS); ic.paste(inner, (1, 1), inner); ic.save(p + '/ic_stat_msa.png')
+          os.makedirs(res + '/drawable-nodpi', exist_ok=True); full.resize((192, 192), Image.LANCZOS).save(res + '/drawable-nodpi/ic_large_msa.png')
           print('icons written')
           PY
         env:

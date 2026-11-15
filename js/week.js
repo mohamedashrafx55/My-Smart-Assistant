@@ -246,8 +246,8 @@ function openToday(){
 MSA.openToday = openToday;
 
 async function notify(s){
-  const name = MSA.myName ? MSA.myName() : '', titles = s.late.concat(s.open).slice(0, 3).map(x => x.title).join(' • ');
-  const title = T('مهامك النهارده يا ' + name, 'Your tasks today, ' + name), body = T(s.n + ' مهمة: ' + titles + (s.n > 3 ? '…' : ''), s.n + ' task(s): ' + titles + (s.n > 3 ? '…' : ''));
+  const name = MSA.myName ? MSA.myName() : '', titles = s.late.concat(s.open).slice(0, 6).map(x => '• ' + x.title).join('\n');
+  const title = T('مهامك النهارده يا ' + name, 'Your tasks today, ' + name), body = T(s.n + ' مهمة:\n' + titles + (s.n > 6 ? '\n…' : ''), s.n + ' task(s):\n' + titles + (s.n > 6 ? '\n…' : ''));
   if (!('Notification' in window) || Notification.permission !== 'granted') return false;
   try {
     const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();

@@ -31,8 +31,10 @@ async def main():
           MSA.state.tasks.push(b({title:'بدون تذكير',due:f(k(7))}));
           MSA.state.tasks.push(b({title:'مخصص',due:'',remind:'custom',remindAt:f(k(3))}));
           MSA.state.settings.daily={on:true,time:'08:00'};MSA.save()}""")
-        r=await pg.evaluate("MSA.alarms.sync(false).then(()=>({s:__ln.sched.map(n=>[n.id,n.title,n.schedule.at.getTime()-Date.now()>0,n.channelId]),perm:__ln.perm,chan:__ln.chan}))")
-        titles=[x[1] for x in r['s']]
+        r=await pg.evaluate("MSA.alarms.sync(false).then(()=>({s:__ln.sched.map(n=>[n.id,n.title,n.schedule.at.getTime()-Date.now()>0,n.channelId,n.body,n.smallIcon,n.largeIcon]),perm:__ln.perm,chan:__ln.chan}))")
+        titles=[x[1] for x in r['s'] if not str(x[4]).startswith('متأخرة')]   # overdue tasks are now listed in the daily alert on purpose (r_notif covers it); this check is about reminders
+        ok('overdue task is listed in the daily alert as «متأخرة»', any(x[1]=='قديمة' and str(x[4]).startswith('متأخرة') for x in r['s']), r['s'])
+        ok('every notification carries the app icons', all(x[5]=='ic_stat_msa' and x[6]=='ic_large_msa' for x in r['s']), r['s'])
         ok('permission asked', r['perm']=='granted'); ok('channel created', r['chan']>=1)
         ok('only future open reminders scheduled', 'تسليم اللوجو' in titles and 'مخصص' in titles and not any(t in titles for t in ['قديمة','مخلّصة','بدون تذكير']), titles)
         ok('daily alerts scheduled', sum(1 for x in r['s'] if x[0]<200)>=1, r['s'])

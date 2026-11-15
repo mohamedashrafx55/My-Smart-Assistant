@@ -27,11 +27,17 @@ function plan(){
   out.sort((a, b) => a.at - b.at); out.length = Math.min(out.length, 120);
   const dl = Object.assign({ on: false, time: '08:00' }, S().settings.daily || {}), m = String(dl.time || '08:00').match(/(\d\d):(\d\d)/);
   if (dl.on && m) {
-    const name = MSA.myName ? MSA.myName() : '', late = tasks.filter(x => { const d = U.toMs(x.due); return d != null && U.dateKey(new Date(d)) < U.dateKey(new Date()); }).length;
-    for (let i = 0; i < 14; i++) {
+    const name = MSA.myName ? MSA.myName() : '', real = tasks.filter(x => !x.routine);   /* routine items are not part of the daily alert */
+    const late = real.filter(x => { const d = U.toMs(x.due); return d != null && U.dateKey(new Date(d)) < U.dateKey(new Date()); });
+    for (let i = 0; i < 7; i++) {
       const d = new Date(); d.setDate(d.getDate() + i); d.setHours(+m[1], +m[2], 0, 0); if (d.getTime() < now + 4000) continue;
-      const key = U.dateKey(d), n = tasks.filter(x => x.due && String(x.due).slice(0, 10) === key).length + late; if (!n) continue;
-      out.push({ id: 100 + i, at: d.getTime(), title: T('أهلاً يا ' + name, 'Hi ' + name), body: T('عندك ' + n + ' مهمة النهارده — افتح التطبيق وشوف يومك', 'You have ' + n + ' task(s) today — open the app to see your day'), extra: { today: true } });
+      const key = U.dateKey(d), day = real.filter(x => x.due && String(x.due).slice(0, 10) === key).sort((a, b) => String(a.due) < String(b.due) ? -1 : 1);
+      const list = day.concat(late.filter(x => !day.includes(x))).slice(0, 8), n = day.length + late.filter(x => !day.includes(x)).length; if (!n) continue;
+      const line = x => { const mm = /T(\d\d:\d\d)/.exec(x.due || ''); const tm = mm && mm[1] !== '23:59' ? mm[1] + ' ' : ''; return '• ' + tm + (x.title || T('بدون عنوان', 'Untitled')); };
+      const grp = 'msa-day-' + key;
+      /* one notification per task (grouped), plus a summary that lists the titles */
+      list.forEach((x, j) => out.push({ id: hash('d' + key + x.id), at: d.getTime() + j * 1000, title: x.title || T('مهمة', 'Task'), body: (late.includes(x) && !day.includes(x) ? T('متأخرة — ', 'Overdue — ') : '') + (/T(\d\d:\d\d)/.test(x.due || '') && !/T23:59/.test(x.due) ? x.due.slice(11, 16) : T('النهارده', 'Today')), group: grp, extra: { tid: x.id, today: true } }));
+      out.push({ id: 100 + i, at: d.getTime() + 9000, title: T('أهلاً يا ' + name + ' — عندك ' + n + ' مهمة', 'Hi ' + name + ' — ' + n + ' task(s)'), body: list.map(line).join('\n'), group: grp, summary: true, extra: { today: true } });
     }
   }
   return out;
@@ -48,14 +54,14 @@ async function sync(ask){
   const ln = LN(); if (!ln) return false;
   if (busy) { again = true; return false; } busy = true;
   try {
-    const items = plan(), sig = JSON.stringify(items.map(x => [x.id, x.at, x.title, x.body, chId()]));
+    const items = plan(), sig = JSON.stringify(items.map(x => [x.id, x.at, x.title, x.body, x.group || '', chId()]));
     if (!items.length && !lastSig && !ask) { busy = false; return true; }
     if (!await perm(ln, ask || items.length > 0)) return false;
     if (sig === lastSig && !ask) return true;
     try { await ln.createChannel(chDef()); } catch (e) {}
     const pend = await ln.getPending();
     if (pend && pend.notifications && pend.notifications.length) await ln.cancel({ notifications: pend.notifications.map(n => ({ id: n.id })) });
-    if (items.length) await ln.schedule({ notifications: items.map(x => ({ id: x.id, title: x.title, body: x.body, channelId: chId(), schedule: { at: new Date(x.at), allowWhileIdle: true }, extra: x.extra })) });
+    if (items.length) await ln.schedule({ notifications: items.map(x => ({ id: x.id, title: x.title, body: x.body, largeBody: x.summary ? x.body : undefined, summaryText: x.summary ? T('مهام اليوم', 'Today') : undefined, group: x.group, groupSummary: !!x.summary, smallIcon: 'ic_stat_msa', largeIcon: 'ic_large_msa', iconColor: '#5b8def', channelId: chId(), schedule: { at: new Date(x.at), allowWhileIdle: true }, extra: x.extra })) });
     lastSig = sig; return true;
   } catch (e) { return false; } finally { busy = false; if (again) { again = false; setTimeout(() => sync(false), 800); } }
 }
@@ -74,7 +80,7 @@ async function test(){
   if (ln) {
     if (!await perm(ln, true)) { MSA.toast(T('إذن الإشعارات مش مفعّل — فعّله من إعدادات الموبايل', 'Notification permission is off — enable it in phone settings'), 'err', 5000); return; }
     try { await ln.createChannel(chDef()); } catch (e) {}
-    await ln.schedule({ notifications: [{ id: 99, title: T('أهلاً يا ' + name, 'Hi ' + name), body: T('ده إشعار تجريبي — اقفل التطبيق وهيظهر بعد 10 ثواني', 'Test alert — close the app and it appears in 10 seconds'), channelId: chId(), schedule: { at: new Date(Date.now() + 10000), allowWhileIdle: true } }] });
+    await ln.schedule({ notifications: [{ id: 99, title: T('أهلاً يا ' + name, 'Hi ' + name), body: T('ده إشعار تجريبي — اقفل التطبيق وهيظهر بعد 10 ثواني', 'Test alert — close the app and it appears in 10 seconds'), channelId: chId(), smallIcon: 'ic_stat_msa', largeIcon: 'ic_large_msa', iconColor: '#5b8def', schedule: { at: new Date(Date.now() + 10000), allowWhileIdle: true } }] });
     MSA.toast(T('اقفل التطبيق دلوقتي — الإشعار هيظهر بعد 10 ثواني', 'Close the app now — the alert shows in 10 seconds'), 'ok', 6000); return;
   }
   try {

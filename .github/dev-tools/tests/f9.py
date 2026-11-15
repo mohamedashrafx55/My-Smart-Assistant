@@ -9,6 +9,7 @@ async def addtask(pg,tid,title):
     await pg.evaluate("([i,t])=>{MSA.state.tasks.push({id:i,title:t,status:'todo',atts:[],created:Date.now()});MSA.saveNow()}",[tid,title])
 async def titles(pg): return await pg.evaluate("MSA.state.tasks.filter(t=>!t.routine&&!/تجريبي/.test(t.desc||'')).map(t=>t.title).sort()")
 async def main():
+    subprocess.run(['pkill','-f','mock_supabase.py']); time.sleep(0.5)   # a mock left over from an earlier/aborted run would answer with stale data
     proc=subprocess.Popen(['python3','mock_supabase.py','8790']); time.sleep(1); urllib.request.urlopen(MOCK+'/__reset')
     try:
         async with Env() as e:
