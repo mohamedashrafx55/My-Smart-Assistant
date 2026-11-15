@@ -14,6 +14,10 @@ async def main():
         ok('default routine has no internal clash',await pg.evaluate("MSA.sched.dayConflicts(MSA.u.dateKey(new Date())).length===0"))
         await pg.evaluate("MSA.state.ui.wk={mode:'day'};MSA.save();MSA.rerender()"); await pg.wait_for_timeout(400)
         txt=await pg.inner_text('#wkBoard')
+        ok('routine hidden by default: not mixed with normal tasks',('نوم' not in txt) and ('وقت الأسرة' not in txt),txt[:200])
+        ok('clock icon shows routine progress 0/7',await pg.evaluate("document.querySelector('.rt-tg .rt-n').textContent==='0/7'"))
+        await pg.click('[data-wk=rtoggle]'); await pg.wait_for_timeout(300)
+        txt=await pg.inner_text('#wkBoard')
         ok('weekly board shows routine ranges',('17:30–18:30' in txt or '17:30' in txt) and 'نوم' in txt,txt[:300])
         ok('routine not counted as overdue',await pg.evaluate("(()=>{const y=new Date(Date.now()-864e5*2),k=MSA.u.dateKey(y);const x=MSA.tasksApi.blank({title:'قديم',due:k+'T10:00',start:k+'T09:00'});x.routine='zz';x.rday=k;MSA.state.tasks.push(x);MSA.rerender();const a=document.querySelector('#wkBoard').innerText.includes('متأخرة');return !a})()"))
         # ---- conflicts
@@ -107,6 +111,7 @@ async def main():
         # deterministic ids + off/on
         ok('routine task ids are unique and deterministic',await pg.evaluate("(()=>{const ids=MSA.state.tasks.filter(x=>x.routine).map(x=>x.id);return new Set(ids).size===ids.length&&ids.every(i=>i.startsWith('rt_'))})()"))
         await pg.evaluate("MSA.state.ui.hometab='tasks';MSA.go('home')"); await pg.wait_for_timeout(600)
+        ok('routine panel stays open after reload of the view',await pg.evaluate("!!document.querySelector('.rt-sec')"))
         await pg.click('[data-wk=routine]'); await pg.wait_for_timeout(400)
         await pg.click('button:has-text("إيقاف الروتين")'); await pg.wait_for_timeout(400)
         await pg.evaluate("(()=>{const b=[...document.querySelectorAll('#overlayRoot button')].find(b=>b.classList.contains('danger')||/تأكيد|موافق|OK|حذف/.test(b.innerText));b&&b.click()})()"); await pg.wait_for_timeout(500)

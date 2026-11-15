@@ -25,7 +25,8 @@ const PR = { urgent: 0, high: 1, normal: 2, low: 3 };
 const sorter = (a, b) => (isDone(a) - isDone(b)) || ((timeOf(a) || '99') < (timeOf(b) || '99') ? -1 : (timeOf(a) || '99') > (timeOf(b) || '99') ? 1 : 0) || (PR[a.priority] - PR[b.priority]) || ((a.created || 0) - (b.created || 0));
 const overdue = () => all().filter(x => !isDone(x) && !x.routine && keyOf(x) && keyOf(x) < todayKey()).sort((a, b) => keyOf(a) < keyOf(b) ? -1 : 1);
 const undated = () => all().filter(x => !isDone(x) && !keyOf(x)).sort(sorter);
-const onDay = k => all().filter(x => keyOf(x) === k).sort(sorter);
+const onDay = k => all().filter(x => keyOf(x) === k && !x.routine).sort(sorter);   /* routine tasks live in their own collapsible panel */
+const routineDay = k => all().filter(x => keyOf(x) === k && x.routine).sort((a, b) => String(a.start || a.due) < String(b.start || b.due) ? -1 : 1);
 function setDay(x, k){ x.due = k + 'T' + (timeOf(x) || '23:59'); x.notified = false; x.updated = Date.now(); }
 const wk = () => { const u = S().ui; u.wk = u.wk || {}; return u.wk; };
 
@@ -72,12 +73,13 @@ function widgetHTML(){
   const hideDone = wk().hideDone === true, m = mode();
   const chips = days.map((d, i) => { const k = keys[i], open = onDay(k).filter(x => !isDone(x)).length;
     return '<button class="wk-d' + (k === selKey ? ' sel' : '') + (k === tk ? ' today' : '') + '" data-wk="day" data-k="' + k + '"><span class="wk-dw">' + esc(fmt(d, { weekday: 'short' })) + '</span><span class="wk-dn">' + d.getDate() + '</span><span class="wk-dc">' + (open ? open : '') + '</span></button>'; }).join('');
-  const od = overdue();
+  const od = overdue(), rtl = routineDay(selKey);
   let body = '';
   if (od.length) body += secHTML(T('متأخرة', 'Overdue'), 'bad', od.map(x => rowHTML(x, { date: true })), '<button class="btn sm ghost" data-wk="odtoday">' + esc(T('انقلها لليوم', 'Move to today')) + '</button>');
   const vis = l => hideDone ? l.filter(x => !isDone(x)) : l;
   if (m === 'day') {
     const l = vis(onDay(selKey));
+    if (wk().rtOpen) body += '<div class="wk-sec rt-sec"><div class="wk-sh"><b>' + esc(T('الروتين اليومي', 'Daily routine')) + '</b><span class="wk-n">' + rtl.filter(isDone).length + '/' + rtl.length + '</span><button class="btn sm ghost" data-wk="routine">' + I('pencil', 'sm') + esc(T('تعديل الروتين', 'Edit routine')) + '</button></div>' + (rtl.length ? rtl.map(x => rowHTML(x)).join('') : '<div class="wk-empty">' + esc(T('مفيش روتين لليوم ده', 'No routine for this day')) + '</div>') + '</div>';
     const cf = MSA.sched ? MSA.sched.dayConflicts(selKey) : [];
     if (cf.length) body += '<div class="wk-conf">⚠ ' + esc(T('فيه تعارض مواعيد النهارده: ', 'Schedule clash: ') + cf.map(p => MSA.sched.label(p[0]) + ' ↔ ' + MSA.sched.label(p[1])).join(' | ')) + '</div>';
     body += '<div class="wk-sec"><div class="wk-sh"><b>' + esc(selKey === tk ? T('النهارده', 'Today') : fmt(parseKey(selKey), { weekday: 'long', day: 'numeric', month: 'long' })) + '</b><span class="wk-n">' + l.length + '</span></div>' +
@@ -93,7 +95,7 @@ function widgetHTML(){
     '<div class="wk-bar"><i style="width:' + pct + '%"></i></div><div class="wk-sub"><span>' + esc(T(done + ' من ' + tot + ' اتعملت', done + ' of ' + tot + ' done')) + '</span><span class="wk-tools">' +
       '<div class="seg" role="group"><button data-wk="mode" data-m="day" class="' + (m === 'day' ? 'on' : '') + '">' + esc(T('يوم', 'Day')) + '</button><button data-wk="mode" data-m="week" class="' + (m === 'week' ? 'on' : '') + '">' + esc(T('أسبوع', 'Week')) + '</button></div>' +
       '<button class="icon-btn sm' + (hideDone ? ' on' : '') + '" data-wk="hidedone" title="' + esc(T('إخفاء المكتملة', 'Hide completed')) + '" aria-label="hide done">' + I(hideDone ? 'eye-off' : 'eye', 'sm') + '</button>' +
-      '<button class="icon-btn sm" data-wk="routine" title="' + esc(T('الروتين اليومي', 'Daily routine')) + '" aria-label="routine">' + I('clock', 'sm') + '</button>' +
+      '<button class="icon-btn sm rt-tg' + (wk().rtOpen ? ' on' : '') + '" data-wk="rtoggle" title="' + esc(T('الروتين اليومي', 'Daily routine')) + '" aria-label="routine" aria-pressed="' + !!wk().rtOpen + '">' + I('clock', 'sm') + (rtl.length ? '<span class="rt-n">' + rtl.filter(isDone).length + '/' + rtl.length + '</span>' : '') + '</button>' +
       '<button class="icon-btn sm' + (dailyOn ? ' on' : '') + '" data-wk="alert" title="' + esc(T('التنبيه اليومي', 'Daily alert')) + '" aria-label="alert">' + I('bell', 'sm') + '</button></span></div>' +
     '<div class="wk-days">' + chips + '</div>' +
     '<div class="wk-add"><input id="wkIn" dir="auto" maxlength="200" placeholder="' + esc(T('أضف مهمة لـ ' + (selKey === tk ? 'النهارده' : fmt(parseKey(selKey), { weekday: 'long' })) + '…', 'Add a task for ' + (selKey === tk ? 'today' : fmt(parseKey(selKey), { weekday: 'long' })) + '…')) + '"><input id="wkTm" type="time" aria-label="' + esc(T('الوقت (اختياري)', 'Time (optional)')) + '"><button class="btn sm primary" data-wk="add">' + I('plus', 'sm') + '</button><button class="btn sm" data-wk="full" title="' + esc(T('تفاصيل كاملة (أولوية، تذكير، تكرار…)', 'Full details (priority, reminder, repeat…)')) + '">' + I('pencil', 'sm') + '</button></div>' +
@@ -129,6 +131,7 @@ function wire(el){
     if (e.target.closest('.wk-subs') && !e.target.matches('input')) return;
     const b = e.target.closest('[data-wk]'); if (!b) return; const a = b.dataset.wk, row = b.closest('[data-id]'), x = row ? byId(row.dataset.id) : null;
     if (a === 'sub') { const sx = row ? byId(row.dataset.id) : null, c = sx && (sx.checklist || []).find(i => i.id === b.dataset.sid); if (c) { c.done = b.checked; sx.updated = Date.now(); persist(); redraw(); } return; }
+    if (a === 'rtoggle') { wk().rtOpen = !wk().rtOpen; if (wk().rtOpen) wk().mode = 'day'; MSA.save(); redraw(); return; }
     if (a === 'routine') { MSA.sched.manage(() => redraw()); return; }
     if (a === 'done') { if (x) { API().setDone(x, b.checked); persist(); redraw(); } return; }
     if (a === 'edit') { if (x) MSA.openTaskEditor(x); return; }
