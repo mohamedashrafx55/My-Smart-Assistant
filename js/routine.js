@@ -16,20 +16,21 @@ const DEFAULT = [
   ['نوم', '23:30', '23:30']
 ];
 const dk = d => U.dateKey(d);
-const R = () => { const s = S(); if (!s.routine) { s.routine = { blocks: DEFAULT.map((d, i) => ({ id: 'rbd' + (i + 1), title: d[0], from: d[1], to: d[2], note: d[3] || '' })), gen: {} }; MSA.save(); } s.routine.gen = s.routine.gen || {}; s.routine.blocks = s.routine.blocks || []; return s.routine; };
+const R = () => { const s = S(); if (!s.routine) { s.routine = { blocks: DEFAULT.map((d, i) => ({ id: 'rbd' + (i + 1), title: d[0], from: d[1], to: d[2], note: d[3] || '' })), gen: {} }; } s.routine.gen = s.routine.gen || {}; s.routine.blocks = s.routine.blocks || []; return s.routine; };
 const toMin = v => { const m = /^(\d\d):(\d\d)$/.exec(v || ''); return m ? +m[1] * 60 + +m[2] : null; };
 const mk = (b, k) => { const x = MSA.tasksApi.blank({ title: b.title, desc: b.note ? '<p>' + esc(b.note) + '</p>' : '', start: k + 'T' + b.from, due: k + 'T' + (b.to || b.from), tags: [TAG], priority: 'normal' }); x.routine = b.id; x.rday = k; x.id = 'rt_' + b.id + '_' + k; return x; };   /* deterministic id: two devices never duplicate a day after sync */
 sched.ensure = function(){
   if (!MSA.tasksApi) return;
   const r = R(); if (r.off) return; let n = 0; const today = dk(new Date());
-  const before = (S().tasks || []).length; S().tasks = (S().tasks || []).filter(x => !(x.routine && x.status !== 'done' && x.rday < today)); if (S().tasks.length !== before) n++;
+  if (!S().tasks) S().tasks = [];
+  if (S().tasks.some(x => x.routine && x.status !== 'done' && x.rday < today)) { S().tasks = S().tasks.filter(x => !(x.routine && x.status !== 'done' && x.rday < today)); n++; }   /* missed days are dropped, not left as overdue */
   const tasks = S().tasks;
   for (let i = 0; i < AHEAD; i++) {
     const d = new Date(); d.setDate(d.getDate() + i); const k = dk(d);
     r.blocks.forEach(b => { const key = b.id + '|' + k; if (r.gen[key]) return; r.gen[key] = 1; if (!tasks.some(x => x.id === 'rt_' + key.replace('|', '_'))) { tasks.push(mk(b, k)); n++; } });
   }
   Object.keys(r.gen).forEach(key => { if (key.split('|')[1] < dk(new Date(Date.now() - 864e5 * 30))) delete r.gen[key]; });
-  if (n) MSA.save();
+  /* deliberately no MSA.save(): tasks and the gen map live in the same state object, so they are saved together at the next normal save, and the ids are deterministic so every device builds the same days (a background sync is not needed for this) */
 };
 /* ---------- conflicts ---------- */
 const span = x => {
