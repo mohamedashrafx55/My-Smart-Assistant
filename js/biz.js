@@ -25,9 +25,10 @@ const curOf = p => (p.time && p.time.cur) || 'EGP';
 const egp = (v, c) => (MSA.rates && MSA.rates.has(c) ? MSA.rates.toEGP(v, c) : v);
 const status = p => { const t = total(p), pd = paidOf(p); if (t <= 0) return pd > 0 ? 'paid' : 'none'; if (remOf(p) <= 0.005) return 'paid'; return pd > 0 ? 'partial' : 'unpaid'; };
 const isLate = p => { const d = p.pay && p.pay.due; return !!d && remOf(p) > 0.005 && dateMs(d) < dateMs(today()); };
+const lateDays = p => { const d = p.pay && p.pay.due; return d && remOf(p) > 0.005 ? Math.max(0, Math.round((dateMs(today()) - dateMs(d)) / DAY)) : 0; };
 const STAT = () => ({ none: [T('بلا سعر', 'No price'), '#8a8a86'], unpaid: [T('غير مدفوع', 'Unpaid'), '#e5484d'], partial: [T('مدفوع جزئيًا', 'Partly paid'), '#f0a030'], paid: [T('مدفوع', 'Paid'), '#2fa66d'] });
 plus.fmt0 = n => Math.round(n).toLocaleString(en() ? 'en-US' : 'ar-EG');
-plus.pay = { total, paid: paidOf, remaining: remOf, status, isLate, cur: curOf };
+plus.pay = { total, paid: paidOf, remaining: remOf, status, isLate, cur: curOf, lateDays };
 plus.convertPay = (p, conv) => { if (p.pay) p.pay.items.forEach(x => { x.amt = conv(x.amt); }); };
 
 function addPayment(p, done, preset){
@@ -192,10 +193,11 @@ function moneyRender(host){
     '<div class="mny-kpis"><div class="kp bad"><span>' + esc(T('غير محصّل', 'Outstanding')) + '</span><b>' + sumLbl(sumE(open, 'rem')) + '</b><i>' + open.length + ' ' + esc(T('مشروع', 'project(s)')) + '</i></div>' +
     '<div class="kp ' + (late.length ? 'bad' : '') + '"><span>' + esc(T('متأخر عن موعده', 'Overdue')) + '</span><b>' + sumLbl(sumE(late, 'rem')) + '</b><i>' + late.length + ' ' + esc(T('مشروع', 'project(s)')) + '</i></div>' +
     '<div class="kp ok"><span>' + esc(T('محصّل هذا الشهر', 'Collected this month')) + '</span><b>' + sumLbl(monthIn) + '</b><i></i></div></div>' +
+    (late.length ? '<div class="od-box" id="odBox"><b>' + I('bell', 'sm') + esc(T('محتاج تتابع تحصيل', 'Collections to chase')) + '</b>' + late.slice().sort((a, b) => lateDays(b.p) - lateDays(a.p)).map(r => '<div class="od-row" data-pid="' + r.p.id + '"><span dir="auto">' + esc(T('العميل ' + ((MSA.clients.of(r.p)) || r.p.name) + ' متأخر ' + lateDays(r.p) + ' يوم', ((MSA.clients.of(r.p)) || r.p.name) + ' is ' + lateDays(r.p) + ' day(s) late')) + ' · <b dir="ltr">' + money(r.rem) + ' ' + r.cur + '</b></span><button class="btn sm primary" data-ma="remind">' + I('mail', 'sm') + esc(T('رسالة جاهزة', 'Ready message')) + '</button></div>').join('') + '</div>' : '') +
     '<div class="pchips" style="margin:14px 0">' + [['open', T('غير محصّل', 'Outstanding')], ['all', T('الكل', 'All')], ['paid', T('مدفوع بالكامل', 'Paid in full')]].map(x => '<button class="pchip' + (f === x[0] ? ' on' : '') + '" data-ma="f" data-v="' + x[0] + '">' + esc(x[1]) + '</button>').join('') + '</div>' +
     (shown.length ? [...groups.entries()].map(([cl, list]) => '<div class="mny-grp"><div class="mny-gh"><b dir="auto">' + esc(cl || T('بدون عميل', 'No client')) + '</b><span>' + esc(T('المتبقي', 'Remaining')) + ': ' + sumLbl(sumE(list, 'rem')) + '</span></div>' +
       list.map(r => { const SL = STAT()[r.st], late = isLate(r.p), pct = r.tot > 0 ? Math.min(100, Math.round(r.pd / r.tot * 100)) : 0;
-        return '<div class="mny-row" data-pid="' + r.p.id + '"><div class="mr-main"><button class="mr-name" data-ma="open" dir="auto">' + esc(r.p.name) + '</button><span class="pill-s" style="background:' + SL[1] + '">' + esc(SL[0]) + '</span>' + (r.p.status === 'done' ? '<span class="pill-s" style="background:#5b8def">' + esc(T('مكتمل', 'Done')) + '</span>' : '') + (late ? '<span class="pill-s" style="background:#e5484d">' + esc(T('متأخر', 'Overdue')) + '</span>' : '') + '</div>' +
+        return '<div class="mny-row" data-pid="' + r.p.id + '"><div class="mr-main"><button class="mr-name" data-ma="open" dir="auto">' + esc(r.p.name) + '</button><span class="pill-s" style="background:' + SL[1] + '">' + esc(SL[0]) + '</span>' + (r.p.status === 'done' ? '<span class="pill-s" style="background:#5b8def">' + esc(T('مكتمل', 'Done')) + '</span>' : '') + (late ? '<span class="pill-s" style="background:#e5484d">' + esc(T('متأخر ' + lateDays(r.p) + ' يوم', lateDays(r.p) + ' day(s) late')) + '</span>' : '') + '</div>' +
           '<div class="mr-nums"><span>' + esc(T('الإجمالي', 'Total')) + ' <b dir="ltr">' + money(r.tot) + ' ' + r.cur + '</b></span><span>' + esc(T('مدفوع', 'Paid')) + ' <b dir="ltr">' + money(r.pd) + '</b></span><span>' + esc(T('متبقي', 'Left')) + ' <b dir="ltr" style="color:' + (r.rem > 0.005 ? '#e5484d' : '#2fa66d') + '">' + money(r.rem) + '</b></span>' + (r.p.pay && r.p.pay.due ? '<span>' + esc(T('الاستحقاق', 'Due')) + ' <b dir="ltr">' + esc(r.p.pay.due) + '</b></span>' : '') + '</div>' +
           '<div class="progress" style="margin:8px 0"><i style="width:' + pct + '%"></i></div>' +
           '<div class="row mr-acts">' + (r.rem > 0.005 ? '<button class="btn sm primary" data-ma="pay">' + I('plus', 'sm') + esc(T('دفعة', 'Payment')) + '</button><button class="btn sm" data-ma="remind">' + I('mail', 'sm') + esc(T('رسالة تذكير', 'Send reminder')) + '</button>' : '<button class="btn sm" data-ma="thanks">' + I('mail', 'sm') + esc(T('رسالة تسليم', 'Delivery message')) + '</button>') + '<button class="btn sm" data-ma="open">' + I('external', 'sm') + esc(T('فتح المشروع', 'Open project')) + '</button></div></div>'; }).join('') + '</div>').join('')
@@ -258,8 +260,8 @@ function msgText(kind, lang, v){
     ? 'أهلاً ' + hi + ' 🌿\nيسعدني إن شغلنا' + (proj ? ' في ' + proj : '') + ' عجبك! ممكن تكتبلي رأي بسيط (من 2 لـ3 سطور) عن تجربتك معايا؟ زي: إيه المشكلة اللي كنت عايز تحلها، وإيه اللي اتغيّر بعد الشغل.\nهستخدمه في معرض أعمالي (وأقدر أكتب اسمك أو أخليه بدون اسم، زي ما تحب). شكرًا جدًا 🙏\n' + me
     : 'Hi ' + hi + ' 🌿\nSo glad you liked our work' + (proj ? ' on ' + proj : '') + '! Could you write a short testimonial (2–3 lines) about working with me? For example: what you needed, and what changed after the work.\nI will use it in my portfolio (with your name or anonymous — your choice). Thank you so much 🙏\n' + me;
   return ar
-    ? 'أهلاً ' + hi + '،\nتذكير ودّي بخصوص ' + (proj ? 'مشروع ' + proj : 'الحساب') + ': المتبقي ' + (v.remaining || '—') + (v.total ? ' من إجمالي ' + v.total : '') + (v.due ? '، وموعد الاستحقاق ' + v.due : '') + '.\nلو تم التحويل ياريت تبعتلي إيصال التحويل. شكرًا لتعاونك 🙏\n' + me
-    : 'Hi ' + hi + ',\nA friendly reminder about ' + (proj ? 'the project ' + proj : 'your account') + ': the remaining balance is ' + (v.remaining || '—') + (v.total ? ' out of ' + v.total : '') + (v.due ? ', due on ' + v.due : '') + '.\nIf you have already transferred it, please send me the receipt. Thank you 🙏\n' + me;
+    ? 'أهلاً ' + hi + '،\nتذكير ودّي بخصوص ' + (proj ? 'مشروع ' + proj : 'الحساب') + ': المتبقي ' + (v.remaining || '—') + (v.total ? ' من إجمالي ' + v.total : '') + (v.due ? '، وموعد الاستحقاق ' + v.due : '') + (v.late > 0 ? ' (متأخر ' + v.late + ' يوم)' : '') + '.\nلو تم التحويل ياريت تبعتلي إيصال التحويل. شكرًا لتعاونك 🙏\n' + me
+    : 'Hi ' + hi + ',\nA friendly reminder about ' + (proj ? 'the project ' + proj : 'your account') + ': the remaining balance is ' + (v.remaining || '—') + (v.total ? ' out of ' + v.total : '') + (v.due ? ', due on ' + v.due : '') + (v.late > 0 ? ' (' + v.late + ' day(s) overdue)' : '') + '.\nIf you have already transferred it, please send me the receipt. Thank you 🙏\n' + me;
 }
 plus.msgText = msgText;
 const waNum = v => { let d = String(v || '').replace(/[^\d+]/g, ''); if (d.startsWith('+')) return d.slice(1); if (d.startsWith('00')) return d.slice(2); if (/^01\d{9}$/.test(d)) return '2' + d; return d.replace(/^0+/, ''); };
@@ -280,7 +282,7 @@ plus.messages = function(o){
   const opts = () => (client ? projects.filter(x => MSA.clients.of(x).toLowerCase() === client.toLowerCase()) : projects);
   const vars = () => {
     const prof = S().profile, pr = p, tot = pr ? total(pr) : 0, c = pr ? curOf(pr) : 'EGP';
-    return { client: client, project: pr ? pr.name : '', me: prof.name || '', total: tot > 0 ? moneyL(tot) + ' ' + c : '', remaining: pr && tot > 0 ? moneyL(remOf(pr)) + ' ' + c : '', due: pr && pr.pay && pr.pay.due ? pr.pay.due : '', deliver: pr && pr.deliver ? pr.deliver : '' };
+    return { client: client, project: pr ? pr.name : '', me: prof.name || '', total: tot > 0 ? moneyL(tot) + ' ' + c : '', remaining: pr && tot > 0 ? moneyL(remOf(pr)) + ' ' + c : '', due: pr && pr.pay && pr.pay.due ? pr.pay.due : '', late: pr ? lateDays(pr) : 0, deliver: pr && pr.deliver ? pr.deliver : '' };
   };
   const m = MSA.modal({
     title: T('رسائل جاهزة للعميل', 'Ready messages'), size: 'wide',
@@ -336,6 +338,18 @@ plus.checkFollow = function(){
   return made;
 };
 plus.followDays = followDays;
+/* overdue receivables: one chase task per project (per due date) + a toast naming the client and the days */
+plus.checkLate = function(){
+  let made = 0; const names = [];
+  S().projects.forEach(p => {
+    const dd = lateDays(p); if (dd < 1 || !p.pay || p.pay.lateFu === p.pay.due) return;
+    const cl = (MSA.clients && MSA.clients.of(p)) || p.name;
+    S().tasks.unshift(mkTask({ title: T('تحصيل: ' + cl + ' متأخر ' + dd + ' يوم', 'Collect: ' + cl + ' is ' + dd + ' day(s) late'), desc: T('المتبقي ' + money(remOf(p)) + ' ' + curOf(p) + ' على مشروع «' + p.name + '». افتح «المستحقات» واضغط «رسالة جاهزة».', money(remOf(p)) + ' ' + curOf(p) + ' left on “' + p.name + '”. Open Money and tap “Ready message”.'), due: today() + 'T11:00', tags: [T('تحصيل', 'collection')], priority: 'high', src: { late: p.id } }));
+    p.pay.lateFu = p.pay.due; made++; names.push(cl + ' (' + dd + ')');
+  });
+  if (made) { MSA.save(); MSA.updateCounts && MSA.updateCounts(); MSA.toast(T(names.slice(0, 2).join('، ') + (made > 2 ? ' +' + (made - 2) : '') + ' — متأخرين عن الدفع، اتعملت مهمة تحصيل', names.slice(0, 2).join(', ') + (made > 2 ? ' +' + (made - 2) : '') + ' — overdue, collection task created'), 'bell', 8000); if (MSA.view === 'tasks' || MSA.view === 'home') MSA.rerender(true); }
+  return made;
+};
 
 /* =====================================================================
    4) SAVED CLIENT IDENTITY
@@ -469,7 +483,7 @@ plus.syncTasks = function(){
    ===================================================================== */
 const _sr = MSA.studio && MSA.studio.render;
 if (_sr) MSA.studio.render = function(tab, p, box){ _sr.apply(this, arguments); if (tab === 'identity') plus.identCard(p, box); };
-setTimeout(() => { plus.checkFollow(); plus.syncTasks(); }, 2500);
+setTimeout(() => { plus.checkFollow(); plus.checkLate(); plus.syncTasks(); }, 2500);
 setInterval(() => { plus.syncTasks(); }, 4000);
-setInterval(() => plus.checkFollow(), 30 * 60000);
+setInterval(() => { plus.checkFollow(); plus.checkLate(); }, 30 * 60000);
 })();

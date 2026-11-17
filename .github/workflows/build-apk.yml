@@ -699,6 +699,117 @@ jobs:
           PY
           grep -n "msaupdate\|REQUEST_INSTALL\|MediaService\|FOREGROUND" android/app/src/main/AndroidManifest.xml
 
+      - name: Quick-add widget + app-icon shortcut (opens the quick task box)
+        working-directory: build
+        run: |
+          d=android/app/src/main/java/com/mysmartassistant/app
+          r=android/app/src/main/res
+          mkdir -p $r/xml $r/layout $r/drawable $r/values
+          cat > $d/QuickAddWidget.java <<'JAVA'
+          package com.mysmartassistant.app;
+
+          import android.app.PendingIntent;
+          import android.appwidget.AppWidgetManager;
+          import android.appwidget.AppWidgetProvider;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.widget.RemoteViews;
+
+          public class QuickAddWidget extends AppWidgetProvider {
+              @Override
+              public void onUpdate(Context ctx, AppWidgetManager mgr, int[] ids) {
+                  for (int id : ids) {
+                      RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.msa_quick_widget);
+                      Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("msaquick://add"));
+                      i.setPackage(ctx.getPackageName());
+                      i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                      PendingIntent pi = PendingIntent.getActivity(ctx, 7, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                      v.setOnClickPendingIntent(R.id.msa_qw_root, pi);
+                      mgr.updateAppWidget(id, v);
+                  }
+              }
+          }
+          JAVA
+          cat > $r/layout/msa_quick_widget.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:id="@+id/msa_qw_root"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:gravity="center"
+              android:orientation="horizontal"
+              android:background="@drawable/msa_qw_bg"
+              android:padding="12dp">
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:text="+"
+                  android:textColor="#FFFFFF"
+                  android:textSize="28sp"
+                  android:textStyle="bold" />
+              <TextView
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:layout_marginStart="10dp"
+                  android:text="@string/msa_quick_add"
+                  android:textColor="#FFFFFF"
+                  android:textSize="16sp"
+                  android:textStyle="bold" />
+          </LinearLayout>
+          XML
+          cat > $r/drawable/msa_qw_bg.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+              <solid android:color="#5B8DEF" />
+              <corners android:radius="22dp" />
+          </shape>
+          XML
+          cat > $r/xml/msa_quick_widget_info.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+              android:minWidth="110dp"
+              android:minHeight="55dp"
+              android:targetCellWidth="2"
+              android:targetCellHeight="1"
+              android:updatePeriodMillis="0"
+              android:initialLayout="@layout/msa_quick_widget"
+              android:resizeMode="horizontal|vertical"
+              android:widgetCategory="home_screen" />
+          XML
+          cat > $r/xml/msa_shortcuts.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+              <shortcut android:shortcutId="quick_add" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/msa_quick_add" android:shortcutLongLabel="@string/msa_quick_add_long">
+                  <intent android:action="android.intent.action.VIEW" android:data="msaquick://add" android:targetPackage="com.mysmartassistant.app" android:targetClass="com.mysmartassistant.app.MainActivity" />
+              </shortcut>
+          </shortcuts>
+          XML
+          cat > $r/values/msa_quick_strings.xml <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="msa_quick_add">مهمة سريعة</string>
+              <string name="msa_quick_add_long">إضافة مهمة سريعة</string>
+              <string name="msa_quick_widget_desc">إضافة مهمة سريعة</string>
+          </resources>
+          XML
+          python3 - <<'PY'
+          import re
+          p='android/app/src/main/AndroidManifest.xml'
+          s=open(p,encoding='utf-8').read()
+          if 'msaquick' not in s:
+              flt='        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="msaquick" android:host="add" />\n        </intent-filter>\n        <meta-data android:name="android.app.shortcuts" android:resource="@xml/msa_shortcuts" />\n'
+              m=re.search(r'(<activity\b[^>]*MainActivity[^>]*>)', s)
+              assert m, 'MainActivity element not found'
+              i=s.index('</activity>', m.end())
+              s=s[:i]+flt+'    '+s[i:]
+          if 'QuickAddWidget' not in s:
+              rec='    <receiver android:name="com.mysmartassistant.app.QuickAddWidget" android:exported="true" android:label="@string/msa_quick_add">\n        <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>\n        <meta-data android:name="android.appwidget.provider" android:resource="@xml/msa_quick_widget_info" />\n    </receiver>\n'
+              s=s.replace('</application>',rec+'</application>',1)
+          open(p,'w',encoding='utf-8').write(s)
+          PY
+          grep -n "msaquick\|QuickAddWidget\|shortcuts" android/app/src/main/AndroidManifest.xml
+
       - name: Notification sounds (8 tones into res/raw)
         working-directory: build
         run: |

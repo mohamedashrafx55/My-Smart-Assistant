@@ -82,9 +82,9 @@ const remoteMeta = async () => { const j = await (await api(ST + '?select=rev,de
 const remoteFull = async () => { const j = await (await api(ST + '?select=*&user_id=eq.' + cfg.uid)).json(); return j[0] || null; };
 
 /* ---------- state machine ---------- */
-let busy = false, applying = false, timer = null, pollT = null, lastErr = '';
+let busy = false, applying = false, timer = null, pollT = null, lastErr = '', fails = 0, lastFail = 0;
 const listeners = new Set(); const emit = () => listeners.forEach(f => { try { f(); } catch (e) {} });
-const info = () => ({ linked: linked(), busy, err: lastErr, last: cfg.last || 0, email: cfg.email || '', auto: cfg.auto !== false, files: fileProg });
+const info = () => ({ linked: linked(), busy, err: lastErr, fails, lastFail, last: cfg.last || 0, email: cfg.email || '', auto: cfg.auto !== false, files: fileProg });
 const overlayOpen = () => !!(document.querySelector('#overlayRoot .overlay') || document.getElementById('msaBoard') || document.getElementById('lock'));
 function localDirty(){ return hashOf(JSON.stringify(payload())) !== cfg.hash; }
 function markSynced(rev){ cfg.rev = rev; cfg.hash = hashOf(JSON.stringify(payload())); cfg.last = Date.now(); lastErr = ''; saveCfg(); }
@@ -200,8 +200,8 @@ async function run(opts){
   if (!linked() || busy) return null;
   if (!navigator.onLine) { lastErr = 'offline'; emit(); return null; }
   busy = true; emit(); let res = null;
-  try { const st = await syncState(opts.force); const fr = await syncFiles(); res = { state: st, files: fr }; lastErr = ''; if (st !== 'deferred') { cfg.last = Date.now(); saveCfg(); } }
-  catch (e) { console.warn('sync', e); lastErr = e.auth ? 'auth' : (e.message || 'error'); res = { error: lastErr }; }
+  try { const st = await syncState(opts.force); const fr = await syncFiles(); res = { state: st, files: fr }; lastErr = ''; fails = 0; if (st !== 'deferred') { cfg.last = Date.now(); saveCfg(); } }
+  catch (e) { console.warn('sync', e); lastErr = e.auth ? 'auth' : (e.message || 'error'); fails++; lastFail = Date.now(); res = { error: lastErr }; }
   busy = false; fileProg = null; emit(); return res;
 }
 function scheduleSoon(ms){ if (!linked() || cfg.auto === false) return; clearTimeout(timer); timer = setTimeout(() => run(), ms || 4000); }
@@ -315,5 +315,5 @@ MSA.wireSync = function(root, redraw){
   const stat = $('#syStat', root);
   if (stat) { const f = () => { if (!document.body.contains(stat)) { listeners.delete(f); return; } stat.textContent = describe(); }; listeners.add(f); }
 };
-MSA.sync = { run, connect, disconnect, info, _cfg: () => cfg, _payload: payload, _merge: mergeStates };
+MSA.sync = { listen: f => { listeners.add(f); return () => listeners.delete(f); }, run, connect, disconnect, info, _cfg: () => cfg, _payload: payload, _merge: mergeStates };
 })();

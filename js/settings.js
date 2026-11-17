@@ -83,6 +83,7 @@ function renderSettings(host){
       (MSA.voiceHTML ? MSA.voiceHTML() : '') +
       (MSA.proHTML ? MSA.proHTML() : '') +
       (MSA.syncHTML ? MSA.syncHTML() : '') +
+      (MSA.dataHTML ? MSA.dataHTML() : '') +
       (MSA.plusHTML ? MSA.plusHTML() : '') +
       MSA.connHTML() +
       MSA.lockHTML() +
@@ -100,6 +101,7 @@ function renderSettings(host){
     if (MSA.wireSound) MSA.wireSound(m.el);
     if (MSA.wireAlarms) MSA.wireAlarms(m.el);
     if (MSA.wireVoice) MSA.wireVoice(m.el, draw);
+    if (MSA.wireData) MSA.wireData(m.el);
     if (MSA.wirePlus) MSA.wirePlus(m.el, draw);
     MSA.wirePerms(m.el);
     usage();

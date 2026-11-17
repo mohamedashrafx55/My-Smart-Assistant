@@ -27,5 +27,30 @@
    "type": "image/png",
    "purpose": "maskable"
   }
+ ],
+ "shortcuts": [
+  {
+   "name": "مهمة سريعة",
+   "short_name": "مهمة",
+   "description": "إضافة مهمة سريعة",
+   "url": "./index.html?add=1",
+   "icons": [
+    {
+     "src": "icons/icon-192.png",
+     "sizes": "192x192"
+    }
+   ]
+  },
+  {
+   "name": "مهام النهارده",
+   "short_name": "النهارده",
+   "url": "./index.html?today=1",
+   "icons": [
+    {
+     "src": "icons/icon-192.png",
+     "sizes": "192x192"
+    }
+   ]
+  }
  ]
 }
