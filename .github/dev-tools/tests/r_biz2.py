@@ -11,7 +11,7 @@ async def main():
         # ---------- files wired in
         ok('all new modules loaded', await pg.evaluate("!!(MSA.pricing&&MSA.profit&&MSA.upwork&&MSA.health&&MSA.quick)"))
         sw = await pg.evaluate("fetch('sw.js').then(r=>r.text())")
-        ok('service worker caches every new script and version bumped', all(x in sw for x in ['js/pricing.js','js/profit.js','js/upwork.js','js/datahealth.js','js/quick.js','msa-v63']))
+        ok('service worker caches every new script and version bumped', all(x in sw for x in ['js/pricing.js','js/profit.js','js/upwork.js','js/datahealth.js','js/quick.js','js/myfiles.js']))
         man = await pg.evaluate("fetch('manifest.webmanifest').then(r=>r.json())")
         ok('PWA manifest has the quick-add shortcut', any('add=1' in s['url'] for s in man.get('shortcuts', [])), man.get('shortcuts'))
 
