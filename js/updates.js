@@ -138,7 +138,7 @@ MSA.updatesHTML = function(){
     '<label class="row" style="cursor:pointer;margin-bottom:8px"><input type="checkbox" class="cb" id="updAuto" ' + (c.auto ? 'checked' : '') + '><span>' + esc(T('فحص تلقائي عند فتح التطبيق وكل 6 ساعات', 'Check automatically when the app opens and every 6 hours')) + '</span></label>' +
     '<div class="hint" dir="auto">' + esc(p === 'android' ? T('على الأندرويد: يُنزَّل ملف الـ APK وتضغط «تثبيت» بنفسك (الأندرويد لا يسمح بالتثبيت الصامت).', 'On Android the APK is downloaded and you tap Install (Android doesn’t allow silent installs).')
       : p === 'windows' ? T('على ويندوز: يُنزَّل المُثبّت ويُشغَّل ثم يُغلق البرنامج ليُحدَّث فوق القديم. بياناتك تبقى.', 'On Windows the installer is downloaded and started, and the app closes so it updates in place. Your data stays.')
-      : T('على الويب: النسخة الجديدة تُحمَّل في الخلفية وتفعَّل بعد إعادة التحميل.', 'On the web the new version downloads in the background and activates after a reload.')) + '</div></div>';
+      : T('على الويب: النسخة الجديدة تُحمَّل في الخلفية وتفعَّل بعد إعادة التحميل.', 'On the web the new version downloads in the background and activates after a reload.')) + '</div>' + (MSA.changelog ? MSA.changelog.sectionHTML() : '') + '</div>';
 };
 function refresh(root){
   const st = root.querySelector('#updStat'); if (st) st.innerHTML = statusHTML(last);
@@ -146,6 +146,7 @@ function refresh(root){
 }
 MSA.wireUpdates = function(root){
   const box = root.querySelector('[data-sec=upd]'); if (!box) return;
+  if (MSA.changelog) MSA.changelog.wire(box);
   box.querySelector('#updAuto').onchange = e => { cfg().auto = e.target.checked; MSA.save(); };
   const go = box.querySelector('#updGo');
   go.onclick = async () => {

@@ -1,0 +1,84 @@
+/* Updates history (سجل التحديثات). One entry per update, newest first.
+   a = Android build number, w = Windows build number (omitted = that platform did not get a build for this update).
+   RULE: every new update appends an entry at the TOP of ENTRIES (a test fails if the current build is missing). */
+(function(){
+'use strict';
+const MSA = window.MSA, U = MSA.u, I = MSA.icon, esc = U.esc, T = (a, e) => MSA.T(a, e);
+const E = (d, a, w, t, b) => ({ d, a, w, t, b });
+const ENTRIES = [
+E('2026-11-17', 35, 34, ['سجل التحديثات', 'Updates history'], [['سجل كامل بكل تحديث من أول البرنامج: التاريخ ورقم البناء للأندرويد والويندوز وإيه اللي اتعمل', 'A full history of every update since day one: date, Android and Windows build numbers, and what changed'], ['بيتفتح من الإعدادات ← فحص التحديثات، وفيه فلتر لكل منصة وبحث وتمييز للإصدار اللي أنت عليه', 'Opens from Settings → Check for updates, with a platform filter, search and a marker on the build you are running'], ['بيتحدّث مع كل تحديث جديد', 'Updated with every new release']]),
+E('2026-11-17', 34, 33, ['مكان حفظ النسخة الاحتياطية', 'Backup location'], [['اختيار مكان الحفظ: تلقائي أو اسأل كل مرة أو فولدر ثابت (على الكمبيوتر)', 'Choose where backups go: automatic, ask each time, or a fixed folder (computers)'], ['على الأندرويد «اسأل كل مرة» بتفتح قايمة المشاركة', 'On Android “Ask each time” opens the share sheet'], ['لو الكتابة في المكان المختار فشلت بتنزل في التنزيلات بدل ما تضيع', 'If writing to the chosen place fails the backup falls back to Downloads'], ['إصلاح: إلغاء الحفظ ماعدش بيسجّل إن النسخة اتعملت', 'Fix: cancelling a backup no longer records it as done']]),
+E('2026-11-17', 33, 32, ['ملفاتي', 'My files'], [['أيقونة مجلد جنب الدليل (الاسم يظهر عند الوقوف عليها) تفتح مدير ملفات شخصي', 'A folder icon next to the guide (name shows on hover) opens a personal file manager'], ['رفع أي نوع ملفات بالزر أو بالسحب والإفلات، ومجلدات جوا مجلدات', 'Upload any file type by button or drag & drop, with nested folders'], ['ألوان وأسماء للمجلدات، نجمة المفضلة، نقل وإعادة تسمية وحذف، تحديد متعدد', 'Folder colours and names, favourites star, move / rename / delete, multi-select'], ['بحث وفلاتر وترتيب وعرض شبكة أو قايمة، ودخول في النسخة الاحتياطية والمزامنة', 'Search, filters, sorting, grid or list view, included in backup and sync'], ['«افتح ملفاتي» بالمساعد الصوتي', '“Open my files” with the voice assistant']]),
+E('2026-11-17', 32, 31, ['التسعير والفواتير وUpwork والمهمة السريعة', 'Pricing, invoices, Upwork and quick task'], [['قائمة أسعار بنطاقات لـ3 فئات عملاء (بسيط / متوسط / محترف)', 'Price list with ranges for 3 client tiers (small / mid / premium)'], ['عروض أسعار وفواتير PDF بلوجوك وترقيم تلقائي وربط بدفعات المشروع', 'Quotes and invoices as PDF with your logo, automatic numbering and project payments'], ['متابعة المستحقات المتأخرة: «العميل فلان متأخر 10 يوم» + رسالة جاهزة + مهمة تحصيل', 'Overdue follow-up: “Client X is 10 days late” + ready message + collection task'], ['ربحية العملاء (إيراد الساعة)', 'Client profitability (revenue per hour)'], ['تبويب «عملاء Upwork» بمكتبة عروض وقالب Word وبروفايل', '“Upwork clients” tab with a proposal library, Word template and profile'], ['شاشة حالة البيانات + تنبيه فشل المزامنة بدون أي فرض', 'Data status screen + sync-failure alert, nothing forced'], ['مهمة سريعة: ويدجت واختصار أيقونة على الأندرويد، Ctrl+Alt+N على الكمبيوتر', 'Quick task: Android widget and icon shortcut, Ctrl+Alt+N on computer']]),
+E('2026-11-15', 31, 30, ['المساعد الصوتي', 'Voice assistant'], [['أوامر عربية مصرية بالصوت أو الكتابة: إضافة مهام وتذكيرات وفتح الشاشات وتسجيل دفعات', 'Egyptian-Arabic commands by voice or typing: add tasks and reminders, open screens, record payments'], ['ردود صوتية، وأمر «تراجع»، وسجل للأوامر', 'Spoken replies, an “undo” command and a command log'], ['تعرّف على الكلام على الأندرويد والويب والكمبيوتر، وتبويب إعدادات خاص', 'Speech recognition on Android, web and desktop, with its own settings tab']]),
+E('2026-11-15', 30, 29, ['أيقونات إشعارات الأندرويد', 'Android notification icons'], [['أيقونة شريط الحالة (شكل أبيض) + اللوجو الكبير في الإشعار', 'Status-bar silhouette icon plus the large logo in the notification'], ['إشعار واحد مجمّع لكل مهمة بعناوين المهام', 'One grouped notification per task with the task titles']]),
+E('2026-11-15', 29, 28, ['إصلاح توليد الروتين', 'Routine generation fix'], [['توليد مهام الروتين ماعدش بيحفظ في الخلفية (بيصلّح مشاكل توقيت المزامنة)', 'Routine generation no longer saves in the background (fixes sync timing problems)']]),
+E('2026-11-15', 28, 27, ['لوحة الروتين القابلة للطي', 'Collapsible routine panel'], [['مهام الروتين اتنقلت في لوحة قابلة للطي ورا أيقونة ساعة بشارة تقدّم', 'Routine tasks moved into a collapsible panel behind a clock icon with a progress badge']]),
+E('2026-11-14', 27, 26, ['إصلاح خطأ يوتيوب 153 على الكمبيوتر', 'YouTube Error 153 fix on desktop'], [['إصلاح خطأ 153 في تطبيق الكمبيوتر (Referer للإطارات المدمجة)', 'Fixed Error 153 in the desktop app (Referer for embedded frames)'], ['تلميح جديد في المشغّل', 'A new hint in the player']]),
+E('2026-11-14', 26, 25, ['مهام الروتين اليومي', 'Daily routine tasks'], [['مهام روتين يومي مع تحذير التعارض', 'Daily routine tasks with a clash warning'], ['مهام فرعية اختيارية، وملاحظات للدراسة وعلامات إنجاز', 'Opt-in sub-tasks, study notes and done marks'], ['دعم الملفات في المراجع وإصلاح مستمع المراجع', 'File support in references and a references listener fix']]),
+E('2026-11-14', 25, 24, ['تبويب المواقع الشهيرة', 'Famous sites tab'], [['تبويب المواقع الشهيرة (متصفح مدمج على الكمبيوتر)', 'Famous sites tab (embedded browser on desktop)'], ['مصادر Flickr وFreepik و8 مواقع إلهام جديدة', 'Flickr and Freepik sources and 8 more inspiration sites'], ['إعادة بناء مجموعات الاختبار الشاملة', 'Rebuilt the full regression test suites']]),
+E('2026-11-13', 24, 23, ['مصادر صور الهوية البصرية', 'Visual identity image sources'], [['الصور اتحصرت في مواقع معروفة (Pexels وUnsplash وPixabay) مع اختصارات المواقع', 'Images limited to known stock sites (Pexels, Unsplash, Pixabay) with site shortcuts'], ['اتشالت مصادر المتاحف والأرشيف المفتوح', 'Museum and open-archive sources removed']]),
+E('2026-11-11', 23, 22, ['نظام الحركة', 'Motion system'], [['أنيميشن للخروج، وإحساس بالضغط على الأزرار، ودخول متدرّج للقوايم', 'Exit animations, button press feedback and staggered list entrances'], ['إعداد الحركة: تلقائي / كاملة / خفيفة / متوقفة', 'Motion setting: Auto / Full / Light / Off']]),
+E('2026-11-10', 22, 21, ['إصلاح الإشعارات فوق أزرار المشغّل', 'Toast fix over player buttons'], [['الإشعارات المنبثقة ماعدتش بتحجب أزرار المشغّل', 'Toasts no longer block the player buttons']]),
+E('2026-11-09', 21, 20, ['تبويبات الخلية', 'Cell tabs'], [['تبويبات للخلية: خصائص، أقسام مهام، وملف Word (.docx)', 'Cell tabs: Properties, To-do sections and a Word (.docx) file'], ['سحب الإطارات إلى الشبكة', 'Drag frames onto the grid']]),
+E('2026-11-08', 20, 19, ['حالة الإنترنت', 'Internet status'], [['حالة الاتصال بالإنترنت في الإعدادات مع تنبيهات انقطاع الاتصال أو ضعفه', 'Internet connection status in Settings with offline and weak-connection notices']]),
+E('2026-11-08', 19, 18, ['أدوات النمو', 'Growth toolkit'], [['خط العملاء المحتملين ومتابعة ما بعد التسليم', 'Leads pipeline and post-delivery follow-up'], ['عروض أسعار بـ3 باقات، وبورتفوليو جاهز، وقوالب تسويق', '3-package quotes, a ready portfolio and marketing templates'], ['لوحة «أنا واقف فين»', 'A “where do I stand” dashboard']]),
+E('2026-11-07', 18, 17, ['الإعداد المالي للمشروع الجديد', 'Financial setup for new projects'], [['إعداد مالي عند إنشاء المشروع: بالوقت أو بالمراحل، مع اقتراحات وخطة دفعات', 'Financial setup on a new project: time-based or milestone, with suggestions and a payment plan']]),
+E('2026-11-07', 17, 16, ['تبويب المواقع المستخدمة', 'Sites used tab'], [['كتالوج للمواقع المستخدمة، وإضافة من رابط، وملاحظات لكل موقع', 'A catalogue of sites used, add from a link, notes per site'], ['شعارات البرامج الرسمية بتتحدث تلقائيًا', 'Official program logos update automatically']]),
+E('2026-11-07', 16, 15, ['تحسينات العربية', 'Arabic improvements'], [['في العربي أدوات الخلية بقت على اليمين جنب العنوان', 'In Arabic the cell tools now sit on the right next to the title'], ['حذف ملف زائد وتحديث ذاكرة التخزين المؤقت', 'Removed a stray file and refreshed the cache']]),
+E('2026-11-07', 15, 14, ['الأداء', 'Performance'], [['صور مصغّرة محفوظة وتحميل كسول لتسريع الشاشات', 'Cached thumbnails and lazy loading to speed up screens'], ['أغلفة للخلايا والمشاريع، والملاحظات بتظهر بنصها الكامل', 'Covers for cells and projects, and notes show their full text']]),
+E('2026-11-06', 14, 13, ['تحديث ويندوز', 'Windows update'], [['نسبة مئوية لتقدّم التحديث، والتعامل مع حظر Smart App Control', 'Percent progress for the update, and handling of the Smart App Control block']]),
+E('2026-11-06', 13, 12, ['دليل الاستخدام', 'User guide'], [['دليل (أيقونة الكتاب جنب الإعدادات) بـ12 فصل وفهرس بحث وصور شرح بالعربي والإنجليزي', 'A user guide (book icon next to Settings): 12 chapters, a searchable contents and annotated screenshots in Arabic and English']]),
+E('2026-11-05', 12, 11, ['مشغّل الموسيقى والفيديو والتقارير', 'Music and video player, and Reports'], [['مشغّل موسيقى وفيديو (بديل لـ mkv وavi) مع تشغيل على شاشة القفل', 'Music and video player (mkv/avi fallback) with lock-screen playback'], ['تقارير برسوم بيانية وتفاصيل المشروع داخلها', 'Reports with charts and inline project details']]),
+E('2026-11-04', 11, 10, ['روابط الفيديو وأصوات جديدة', 'Video links and new sounds'], [['روابط فيديو داخل خلايا الخطوات بغلاف (يوتيوب تلقائي أو غلاف مخصص)', 'Video links in step cells with a cover (automatic for YouTube, or a custom cover)'], ['3 أصوات إشعارات جديدة', '3 new notification sounds']]),
+E('2026-11-03', 10, 9, ['البصمة عند اللمس فقط', 'Fingerprint only on tap'], [['طلب البصمة بقى عند الضغط فقط (مش تلقائي فوق أنيميشن اللوجو)', 'The fingerprint prompt appears only on tap (not automatically over the logo animation)']]),
+E('2026-11-03', 9, null, ['إصلاح توقيع الأندرويد', 'Android signing fix'], [['استخدام مفتاح التوقيع الثابت صراحةً عشان التحديثات تتثبّت فوق التطبيق القديم، مع التحقق منه بعد البناء', 'Use the fixed signing key explicitly so updates install over the old app, and verify it after the build']]),
+E('2026-11-03', 8, 8, ['عوامل النجاح وألوان وبصمة وصلاحيات', 'Success factors, colour theory, fingerprint, permissions'], [['قوائم عوامل النجاح وتبويب نظرية الألوان', 'Success-factor lists and a colour theory tab'], ['زر البصمة على شاشة القفل', 'A fingerprint button on the lock screen'], ['صلاحيات أندرويد حقيقية لجهات الاتصال والتخزين وأسماء أوضح للصلاحيات', 'Real Android contacts and storage permissions and clearer permission labels']]),
+E('2026-11-01', 7, 7, ['تحديث التطبيق من داخله على أندرويد', 'In-app update on Android'], [['تنزيل ملف APK من داخل التطبيق مع نسبة تقدّم وفتح شاشة التثبيت', 'Download the APK inside the app with progress and open the installer']]),
+E('2026-11-01', 6, 6, ['فتح رابط التحديث على أندرويد', 'Android update link'], [['فتح رابط الـ APK في متصفح النظام (AppLauncher)', 'Open the APK link in the system browser (AppLauncher)']]),
+E('2026-11-01', 5, 5, ['صلاحيات أندرويد', 'Android permissions'], [['صلاحيات الكاميرا والمايك والموقع والحافظة', 'Camera, microphone, location and clipboard permissions'], ['شاشة افتتاحية أخف على الموبايل', 'A lighter splash screen on phones']]),
+E('2026-10-31', 4, 4, ['فحص التحديثات والأستاذ الأكاديمي', 'Update checker and academic professor'], [['فحص التحديثات من إصدارات GitHub', 'Update checker based on GitHub releases'], ['تبويب «الأستاذ الأكاديمي»', 'An academic professor tab'], ['نشر الإصدارات تلقائيًا من الـ workflow', 'Releases published automatically by the workflow']]),
+E('2026-10-30', null, null, ['السهم المنحني والأصوات والمفضلة', 'Curved arrows, sounds, favourites'], [['ثني الأسهم في الخريطة', 'Arrow bending in the map'], ['5 أصوات إشعارات', '5 notification sounds'], ['المفضلة ونصائح احترافية لكل خطوة', 'Favourites and per-step pro tips']]),
+E('2026-10-27', null, null, ['تبويبات الرئيسية والشعار الجديد', 'Home tabs and the new logo'], [['تبويبات في الصفحة الرئيسية وأيقونات أكبر على الموبايل', 'Home tabs and bigger tiles on mobile'], ['شعار وأيقونات جديدة', 'New logo and icons'], ['أسعار العملات اتنقلت لشاشة المدفوعات', 'Currency rates moved to Payments']]),
+E('2026-10-25', null, null, ['إعداد بناء أندرويد وويندوز', 'Android and Windows build setup'], [['إضافة بناء تلقائي لنسخة الأندرويد (APK) ونسخة ويندوز (EXE)', 'Automatic build for the Android (APK) and Windows (EXE) versions']]),
+E('2026-10-21', null, null, ['النسخة الأولى', 'First version'], [['أول نسخة من البرنامج على الويب (المراحل الأولى 1 و2 و3)', 'The first web version of the app (first three stages)']])
+];
+
+const bnow = () => MSA.build || { n: 0, platform: 'web' };
+const curPlat = () => { const p = bnow().platform; if (p && p !== 'web') return p; if (window.msaDesktop) return 'windows'; try { if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return 'android'; } catch (e) {} return 'web'; };
+const isMine = e => { const b = bnow(), p = curPlat(); return b.n > 0 && ((p === 'android' && e.a === b.n) || (p === 'windows' && e.w === b.n)); };
+const platOf = e => [e.a ? 'android' : '', e.w ? 'windows' : '', 'web'].filter(Boolean);
+const latestOf = p => ENTRIES.reduce((m, e) => Math.max(m, p === 'android' ? (e.a || 0) : (e.w || 0)), 0);
+
+function card(e, mine){
+  const pills = (e.a ? '<span class="cl-p and">' + I('download', 'xs') + esc(T('أندرويد', 'Android')) + ' #' + e.a + '</span>' : '') + (e.w ? '<span class="cl-p win">' + I('download', 'xs') + esc(T('ويندوز', 'Windows')) + ' #' + e.w + '</span>' : '') + '<span class="cl-p web">' + esc(T('ويب', 'Web')) + '</span>';
+  return '<article class="cl-e' + (mine ? ' mine' : '') + '"><div class="cl-h"><time dir="ltr">' + esc(e.d) + '</time><div class="cl-pl">' + pills + '</div>' + (mine ? '<span class="cl-me">' + esc(T('إصدارك الحالي', 'Your current build')) + '</span>' : '') + '</div>' +
+    '<h5 dir="auto">' + esc(T(e.t[0], e.t[1])) + '</h5><ul>' + e.b.map(x => '<li dir="auto">' + esc(T(x[0], x[1])) + '</li>').join('') + '</ul></article>';
+}
+function listHTML(f, q, limit){
+  q = (q || '').trim().toLowerCase();
+  let list = ENTRIES.filter(e => (!f || f === 'all' || (f === 'android' ? !!e.a : f === 'windows' ? !!e.w : true)) && (!q || (e.d + ' ' + e.t.join(' ') + ' ' + e.b.map(x => x.join(' ')).join(' ')).toLowerCase().includes(q)));
+  const total = list.length; if (limit) list = list.slice(0, limit);
+  return { html: list.length ? list.map(e => card(e, isMine(e))).join('') : '<div class="hint" style="padding:14px 0">' + esc(T('لا نتائج', 'No results')) + '</div>', total };
+}
+function open(){
+  let f = 'all', q = '';
+  const m = MSA.modal({ title: T('سجل التحديثات', 'Updates history'), size: 'wide', footer: false,
+    body: '<div class="cl-top"><div class="cs-search grow">' + I('search', 'sm') + '<input type="search" id="clQ" dir="auto" placeholder="' + esc(T('ابحث في التحديثات…', 'Search updates…')) + '"></div><div class="seg" id="clF">' + [['all', T('الكل', 'All')], ['android', T('أندرويد', 'Android')], ['windows', T('ويندوز', 'Windows')]].map(x => '<button data-v="' + x[0] + '" class="' + (x[0] === 'all' ? 'on' : '') + '">' + esc(x[1]) + '</button>').join('') + '</div></div><div class="hint" id="clCount" style="margin:6px 0"></div><div class="cl-list" id="clL"></div>',
+    onMount: el => {
+      const L = el.querySelector('#clL'), C = el.querySelector('#clCount');
+      const paint = () => { const r = listHTML(f, q); L.innerHTML = r.html; C.textContent = T(r.total + ' تحديث', r.total + ' update(s)'); };
+      el.querySelector('#clF').onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; f = b.dataset.v; el.querySelectorAll('#clF button').forEach(x => x.classList.toggle('on', x === b)); paint(); };
+      el.querySelector('#clQ').oninput = e => { q = e.target.value; paint(); };
+      paint();
+    } });
+  return m;
+}
+function sectionHTML(){
+  const r = listHTML('all', '', 2), b = bnow(), p = curPlat(), lat = p === 'web' ? 0 : latestOf(p);
+  return '<div class="cl-sec" id="clSec"><hr class="sep" style="margin:14px 0"><div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px"><b>' + I('list', 'sm') + ' ' + esc(T('سجل التحديثات', 'Updates history')) + '</b><span class="hint">' + esc(T(ENTRIES.length + ' تحديث منذ البداية', ENTRIES.length + ' updates since the start')) + '</span></div>' +
+    '<div class="cl-mini">' + r.html + '</div><button class="btn sm" id="clAll" style="margin-top:8px">' + I('list', 'sm') + '<span>' + esc(T('عرض السجل الكامل', 'Show the full history')) + '</span></button></div>';
+}
+function wire(root){ const b = root.querySelector('#clAll'); if (b) b.onclick = open; }
+MSA.changelog = { entries: ENTRIES, open, sectionHTML, wire, latestOf, isMine, curPlat };
+})();
