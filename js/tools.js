@@ -114,12 +114,49 @@ async function pruneNative(FS){
     for (const n of files.slice(0, Math.max(0, files.length - 4))) { try { await FS.deleteFile({ path: 'MySmartAssistant/' + n, directory: 'DOCUMENTS' }); } catch (e) {} }
   } catch (e) {}
 }
+/* where the backup goes: auto (default) | ask (choose each time) | folder (a fixed folder on computers) */
+const canPick = () => typeof window.showSaveFilePicker === 'function';
+const canDir = () => typeof window.showDirectoryPicker === 'function';
+function hdb(){ return new Promise((res, rej) => { const r = indexedDB.open('msa_bk', 1); r.onupgradeneeded = () => r.result.createObjectStore('h'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function hget(){ try { const d = await hdb(); return await new Promise(res => { const q = d.transaction('h').objectStore('h').get('dir'); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); }); } catch (e) { return null; } }
+async function hset(h){ try { const d = await hdb(); await new Promise((res, rej) => { const t = d.transaction('h', 'readwrite'); t.objectStore('h').put(h, 'dir'); t.oncomplete = res; t.onerror = () => rej(t.error); }); return true; } catch (e) { return false; } }
+let memDir = null;
+plus._ds = { get: async () => memDir || await hget(), set: async h => { memDir = h; return hset(h); } };
+plus.pickBackupFolder = async function(){
+  if (!canDir()) return null;
+  try { const h = await window.showDirectoryPicker({ mode: 'readwrite' }); await plus._ds.set(h); const b = bk(); b.mode = 'folder'; b.dirName = h.name; MSA.save(); return h; }
+  catch (e) { return null; }
+};
+async function dirReady(h){
+  try { let p = await h.queryPermission({ mode: 'readwrite' }); if (p !== 'granted') p = await h.requestPermission({ mode: 'readwrite' }); return p === 'granted'; } catch (e) { return false; }
+}
 /* returns where the backup went, or '' when the user cancelled */
 async function writeBackup(){
-  const json = await MSA.exportAll(light()), name = bkName();
+  const name = bkName(), b = bk(), mode = b.mode || 'auto';
   const FS = MSA.native && MSA.native('Filesystem'), SH = MSA.native && MSA.native('Share');
+  /* ask for the destination BEFORE the (slow) export so the click is still fresh */
+  let target = null, label = '';
+  if (!FS) {
+    if (mode === 'folder' && canDir()) {
+      let h = await plus._ds.get();
+      if (!h || !(await dirReady(h))) { h = await plus.pickBackupFolder(); if (!h) return ''; if (!(await dirReady(h))) return ''; }
+      target = { dir: h }; label = T('المجلد: ', 'Folder: ') + h.name;
+    } else if (mode === 'ask' && canPick()) {
+      try { const h = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'Backup (JSON)', accept: { 'application/json': ['.json'] } }] }); target = { file: h }; label = T('المكان اللي اخترته: ', 'Where you chose: ') + h.name; }
+      catch (e) { if (e && e.name === 'AbortError') return ''; }
+    }
+  }
+  plus._inBackup = true; let json; try { json = await MSA.exportAll(light()); } finally { plus._inBackup = false; }
+  if (target) {
+    try {
+      const fh = target.file || await target.dir.getFileHandle(name, { create: true });
+      const w = await fh.createWritable(); await w.write(json); await w.close(); return label;
+    } catch (e) { console.warn('backup write', e); MSA.toast(T('تعذّر الكتابة في المكان المختار — هنحفظها في التنزيلات', 'Could not write to the chosen place — saving to Downloads instead'), 'err', 5000); }
+  }
   if (FS) {
-    try { await FS.writeFile({ path: 'MySmartAssistant/' + name, data: json, directory: 'DOCUMENTS', encoding: 'utf8', recursive: true }); pruneNative(FS); return T('مجلد المستندات / MySmartAssistant', 'Documents / MySmartAssistant'); } catch (e) {}
+    if (mode !== 'ask') {
+      try { await FS.writeFile({ path: 'MySmartAssistant/' + name, data: json, directory: 'DOCUMENTS', encoding: 'utf8', recursive: true }); pruneNative(FS); return T('مجلد المستندات / MySmartAssistant', 'Documents / MySmartAssistant'); } catch (e) {}
+    }
     if (SH) { try { const r = await FS.writeFile({ path: name, data: json, directory: 'CACHE', encoding: 'utf8' }); await SH.share({ title: name, url: r.uri, dialogTitle: name }); return T('عبر قائمة المشاركة', 'via the share sheet'); } catch (e) { if (e && /cancel/i.test(String(e.message || e))) return ''; } }
   }
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 8000);
@@ -152,11 +189,18 @@ async function backupTick(){
 plus.backupTick = backupTick;
 /* a manual export counts as a backup too */
 const _exp = MSA.exportAll;
-MSA.exportAll = async function(){ const r = await _exp.apply(this, arguments); const b = bk(); b.last = Date.now(); b.snooze = 0; MSA.save(); hideBanner(); return r; };
+MSA.exportAll = async function(){ const r = await _exp.apply(this, arguments); if (plus._inBackup) return r; const b = bk(); b.last = Date.now(); b.snooze = 0; MSA.save(); hideBanner(); return r; };
 setTimeout(backupTick, 6000); setInterval(backupTick, 20 * 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(backupTick, 1500); });
 
 /* ---------- settings section ---------- */
+function bkModeHint(b){
+  const nat = !!(MSA.native && MSA.native('Filesystem')), m = b.mode || 'auto';
+  if (nat) return m === 'ask' ? T('كل نسخة هتفتح قايمة المشاركة وأنت تختار المكان (درايف، ملفات، واتساب…).', 'Each backup opens the share sheet so you pick the place.') : T('النسخة بتتحفظ تلقائيًا في المستندات / MySmartAssistant.', 'Backups are saved automatically to Documents / MySmartAssistant.');
+  if (m === 'folder') return b.dirName ? T('هتتحفظ في الفولدر: ', 'Saved to the folder: ') + b.dirName + T(' (ممكن المتصفح يطلب إذن مرة).', ' (the browser may ask for permission once).') : T('لسه ماخترتش فولدر — اضغط «اختر مكان الحفظ».', 'No folder chosen yet — tap “Choose where to save”.');
+  if (m === 'ask') return canPick() ? T('كل نسخة هتفتح نافذة تختار منها المكان والاسم.', 'Each backup opens a window to choose the place and name.') : T('متصفحك مابيدعمش اختيار المكان — النسخة هتنزل في التنزيلات.', 'Your browser cannot choose a place — backups go to Downloads.');
+  return T('النسخة بتنزل في فولدر التنزيلات.', 'Backups go to your Downloads folder.');
+}
 MSA.plusHTML = function(){
   const s = S().settings, b = bk();
   const last = b.last ? MSA.fmtDate(b.last, true) : '—';
@@ -164,6 +208,9 @@ MSA.plusHTML = function(){
     '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="bkOn" ' + (b.on ? 'checked' : '') + '><span>' + esc(T('ذكّرني بنسخة احتياطية (أنت اللي توافق — مفيش حفظ تلقائي)', 'Remind me to back up (I always confirm — nothing is saved on its own)')) + '</span></label>' +
     '<div class="row" style="margin-bottom:8px"><label class="f" style="margin:0">' + esc(T('كل', 'Every')) + '</label><select id="bkDays" style="width:auto">' + [[1, T('يوم', 'day')], [3, T('3 أيام', '3 days')], [7, T('أسبوع', 'week')], [14, T('أسبوعين', '2 weeks')], [30, T('شهر', 'month')]].map(x => '<option value="' + x[0] + '"' + (b.days === x[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</select><button class="btn sm primary" id="bkNow">' + I('download', 'sm') + esc(T('احفظ نسخة الآن', 'Back up now')) + '</button></div>' +
     '<div class="hint">' + esc(T('آخر نسخة: ', 'Last backup: ')) + '<b>' + esc(last) + '</b>' + (b.where ? ' · ' + esc(b.where) : '') + '</div>' +
+    '<div class="field" style="margin-top:12px" id="bkWhere"><label class="f">' + esc(T('مكان حفظ النسخة', 'Backup location')) + '</label><div class="seg" id="bkMode">' + [['auto', T('تلقائي', 'Automatic')], ['ask', T('اسأل كل مرة', 'Ask each time')]].concat(canDir() ? [['folder', T('فولدر ثابت', 'Fixed folder')]] : []).map(x => '<button data-v="' + x[0] + '" class="' + ((b.mode || 'auto') === x[0] ? 'on' : '') + '">' + esc(x[1]) + '</button>').join('') + '</div>' +
+    '<div class="hint" style="margin-top:6px" id="bkModeHint">' + esc(bkModeHint(b)) + '</div>' +
+    '<div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><button class="btn sm" id="bkPick">' + I('folder', 'sm') + esc(T('اختر مكان الحفظ', 'Choose where to save')) + '</button></div></div>' +
     '<div class="row" style="margin-top:10px"><label class="f" style="margin:0">' + esc(T('أقصى حجم للملف الواحد في النسخة', 'Max size per file in the backup')) + '</label><select id="bkMax" style="width:auto">' + [15, 50, 100, 200, 400].map(x => '<option value="' + x + '"' + (b.maxMB === x ? ' selected' : '') + '>' + x + ' ' + esc(T('م.ب', 'MB')) + '</option>').join('') + '</select></div>' +
     '<div class="hint" style="margin-top:4px">' + esc(T('النسخة لا تُحفظ إلا عندما تضغط «احفظ نسخة الآن». الملفات الأكبر من الحد المختار تُترك خارج النسخة وتظهر لك رسالة بعددها. كل ما كبر الحد زادت الذاكرة المطلوبة، فلو الجهاز بطيء أو الموبايل ضعيف اختر حدًا أقل.', 'A copy is only saved when you press “Back up now”. Files larger than the chosen limit are left out and you are told how many. A higher limit needs more memory, so pick a lower one on slow devices or weak phones.')) + '</div>' +
     '<hr class="sep" style="margin:16px 0">' +
@@ -175,6 +222,12 @@ MSA.wirePlus = function(root, redraw){
   $('#bkOn', root).onchange = e => { b.on = e.target.checked; MSA.save(); if (!b.on) hideBanner(); };
   $('#bkDays', root).onchange = e => { b.days = parseInt(e.target.value, 10) || 7; MSA.save(); };
   $('#bkNow', root).onclick = () => plus.backupNow();
+  const repaint = () => { $$('#bkMode button', root).forEach(x => x.classList.toggle('on', x.dataset.v === (b.mode || 'auto'))); $('#bkModeHint', root).textContent = bkModeHint(b); };
+  $('#bkMode', root).onclick = async e => { const x = e.target.closest('[data-v]'); if (!x) return; if (x.dataset.v === 'folder' && !b.dirName) { const h = await plus.pickBackupFolder(); if (!h) { repaint(); return; } } b.mode = x.dataset.v; MSA.save(); repaint(); };
+  $('#bkPick', root).onclick = async () => {
+    if (canDir()) { const h = await plus.pickBackupFolder(); if (h) { MSA.toast(T('اتحدد الفولدر: ' + h.name, 'Folder set: ' + h.name), 'ok'); repaint(); } }
+    else { b.mode = 'ask'; MSA.save(); repaint(); MSA.toast(canPick() ? T('هتختار المكان مع كل نسخة', 'You will choose the place for each backup') : T('هتختار المكان من قايمة المشاركة مع كل نسخة', 'You will choose the place from the share sheet for each backup'), 'ok'); }
+  };
   $('#bkMax', root).onchange = e => { b.maxMB = parseInt(e.target.value, 10) || 100; MSA.save(); };
   $('#fuOn', root).onchange = e => { s.followOn = e.target.checked; MSA.save(); };
   $('#fuDays', root).onchange = e => { const v = Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 14)); s.followDays = v; e.target.value = v; MSA.save(); plus.checkFollow && plus.checkFollow(); };
