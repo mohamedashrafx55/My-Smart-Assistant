@@ -3,8 +3,9 @@ from h import *
 MOCK='http://localhost:8790'
 def db(path='/__db'): return json.loads(urllib.request.urlopen(MOCK+path).read())
 async def conn(pg,pw='pw123456'):
-    return await pg.evaluate("""async pw=>{try{await MSA.sync.connect('http://localhost:8790','anon-key','me@x.com',pw);return 'ok'}catch(e){return 'ERR '+e.message}}""",pw)
-RUN="async f=>{return JSON.stringify(await MSA.sync.run({force:!!f}))}"
+    return await pg.evaluate("""async pw=>{try{await MSA.sync.connect('http://localhost:8790','anon-key','me@x.com',pw);MSA.sync._cfg().auto=false;return 'ok'}catch(e){return 'ERR '+e.message}}""",pw)
+# run() returns null while the app's own background sync is busy (by design) -> wait and retry
+RUN="async f=>{let r=null;for(let i=0;i<40&&r===null;i++){r=await MSA.sync.run({force:!!f});if(r===null&&navigator.onLine)await new Promise(k=>setTimeout(k,250))}return JSON.stringify(r)}"
 async def addtask(pg,tid,title):
     await pg.evaluate("([i,t])=>{MSA.state.tasks.push({id:i,title:t,status:'todo',atts:[],created:Date.now()});MSA.saveNow()}",[tid,title])
 async def titles(pg): return await pg.evaluate("MSA.state.tasks.filter(t=>!t.routine&&!/تجريبي/.test(t.desc||'')).map(t=>t.title).sort()")
