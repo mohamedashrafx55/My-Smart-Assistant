@@ -223,6 +223,7 @@ function build(){
     else if (a === 'yes') answer(true);
     else if (a === 'no') answer(false);
     else if (a === 'pick') answer(+b.dataset.i);
+    else if (a === 'sug') { const t = (V._sug || [])[+b.dataset.i]; clearAsk(); if (t) { const i = gid('vcIn'); i.value = t; sendTyped(); } }
   });
   gid('vcIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendTyped(); } else if (e.key === 'Escape') closePanel(); });
 }
@@ -535,8 +536,127 @@ EX.study_done = async r => {
   await reply('علّمت «' + clip(v.title || 'الفيديو', 50) + '» إنه خلص.');
 };
 
+/* ---- plans (bulk / filtered / AI) ---- */
+const SM = () => window.VoiceSmart, AI = () => window.VoiceAI;
+const mctx = () => ({ now: now(), toMs: U.toMs });
+const PRIO_AR = { urgent: 'عاجلة', high: 'عالية', normal: 'عادية', low: 'منخفضة' };
+const dueLine = x => { const m = U.toMs(x.due); return m == null ? '' : ' — ' + NLP.sayDate(U.dateKey(new Date(m)), now()) + (hasTime(x) ? ' ' + NLP.sayTime(hm(m)) : ''); };
+const itemLine = x => (x.status === 'done' ? '✓ ' : '') + (x.type === 'note' ? '📝 ' : '') + clip(x.title || '(بدون عنوان)', 60) + dueLine(x) + (x.pinned ? ' 📌' : '') + (x.priority === 'urgent' || x.priority === 'high' ? ' ❗' : '');
+const sortDue = (a, b) => ((U.toMs(a.due) == null ? 9e15 : U.toMs(a.due)) - (U.toMs(b.due) == null ? 9e15 : U.toMs(b.due)));
+const plural = (n, one, two, many) => n === 1 ? one : n === 2 ? two : many;
+const cnt = (n, w) => n === 0 ? 'مفيش ' + w.many : n === 1 ? w.one : n === 2 ? w.two : n + ' ' + (n <= 10 ? w.few : w.many);
+const WT = { one: 'مهمة واحدة', two: 'مهمتين', few: 'مهام', many: 'مهمة' }, WN = { one: 'ملاحظة واحدة', two: 'ملاحظتين', few: 'ملاحظات', many: 'ملاحظة' }, WB = { one: 'مهمة أو ملاحظة', two: 'عنصرين', few: 'عناصر', many: 'عنصر' };
+const wordsFor = f => f.type === 'note' ? WN : f.type === 'both' ? WB : WT;
+
+async function runTasksOp(o, st){
+  const f = o.filter || { type: 'task', status: 'any', due: '' }, SMx = SM();
+  const list = SMx.match(S().tasks, f, mctx()).sort(sortDue), what = SMx.describe(f), W = wordsFor(f);
+  if (o.act === 'count') { await reply(list.length ? 'عندك ' + cnt(list.length, W) + ' (' + what + ').' : 'مفيش ' + W.many.replace('مهمة', 'مهام').replace('ملاحظة', 'ملاحظات').replace('عنصر', 'عناصر') + ' تطابق: ' + what + '.'); return; }
+  if (o.act === 'list') {
+    if (!list.length) { await reply('مفيش حاجة تطابق: ' + what + '.'); return; }
+    const shown = list.slice(0, 15), say = 'لقيت ' + cnt(list.length, W) + ' (' + what + ')' + (list.length <= 4 ? ': ' + list.map(x => clip(x.title, 40)).join('، ') : ': ' + list.slice(0, 3).map(x => clip(x.title, 36)).join('، ') + ' وغيرهم') + '.';
+    await reply(say, { show: 'لقيت ' + list.length + ' — ' + what + ':\n' + shown.map((x, i) => (i + 1) + '. ' + itemLine(x)).join('\n') + (list.length > shown.length ? '\nو' + (list.length - shown.length) + ' كمان…' : '') });
+    return;
+  }
+  if (!list.length) { await reply('مفيش حاجة تطابق: ' + what + '، فمعملتش حاجة.'); return { ok: false }; }
+  const n = list.length, sample = list.slice(0, 3).map(x => '«' + clip(x.title, 26) + '»').join('، ') + (n > 3 ? ' وغيرهم' : '');
+  const verbs = { delete: 'أحذف', complete: 'أخلّص', reopen: 'أرجّع', move: 'أأجّل', pin: 'أثبّت', unpin: 'أشيل التثبيت من', priority: 'أغيّر أولوية' };
+  const q = verbs[o.act] + ' ' + cnt(n, W).replace('مهمة واحدة', 'مهمة واحدة') + ' (' + what + ')' + (o.act === 'move' ? ' لـ' + NLP.sayDate(o.set.date || today(), now()) + (o.set.time ? ' ' + NLP.sayTime(o.set.time) : '') : '') + '؟ ' + sample;
+  const ok = await confirm(q, o.act === 'delete' || n > 3); if (!ok) { await reply('تمام، مفيش تغيير.'); return { noLog: true, cancelled: true }; }
+  st.snap();
+  n && list.forEach(x => {
+    if (o.act === 'delete') { const i = taskIdx(x.id); if (i >= 0) S().tasks.splice(i, 1); }
+    else if (o.act === 'complete') { if (x.status !== 'done') MSA.tasksApi.setDone(x, true); }
+    else if (o.act === 'reopen') { x.status = 'todo'; delete x.completedAt; x.notified = false; x.updated = Date.now(); }
+    else if (o.act === 'move') { const od = U.toMs(x.due), d0 = od != null ? U.dateKey(new Date(od)) : today(), t0 = od != null && hasTime(x) ? hm(od) : ''; x.due = (o.set.date || d0) + 'T' + (o.set.time || t0 || '23:59'); x.notified = false; x.updated = Date.now(); }
+    else if (o.act === 'pin') x.pinned = true;
+    else if (o.act === 'unpin') x.pinned = false;
+    else if (o.act === 'priority') x.priority = o.set.prio || 'normal';
+  });
+  st.changed = true;
+  const done = { delete: 'اتحذف', complete: 'اتخلّص', reopen: 'اترجّع', move: 'اتأجّل', pin: 'اتثبّت', unpin: 'اتشال التثبيت منه', priority: 'اتغيّرت أولويته' }[o.act];
+  st.say.push(cnt(n, W).replace('مفيش ', '') + ' ' + done + '.');
+}
+
+async function runOneOp(o, st){
+  const x = await pickOne(S().tasks.filter(t => !t.routine), o.query, taskText, 'مهمة'); if (!x) return { noLog: true };
+  const t = clip(x.title, 40);
+  if (o.act === 'delete') { const ok = await confirm('أحذف «' + t + '» فعلاً؟', true); if (!ok) { await reply('تمام، مفيش حذف.'); return { noLog: true }; } st.snap(); const i = taskIdx(x.id); if (i >= 0) S().tasks.splice(i, 1); st.say.push('اتحذفت «' + t + '».'); }
+  else if (o.act === 'complete') { st.snap(); MSA.tasksApi.setDone(x, true); st.say.push('خلّصت «' + t + '».'); }
+  else if (o.act === 'rename') { if (!o.value) return; st.snap(); x.title = clip(o.value, 200); x.updated = Date.now(); st.say.push('غيّرت الاسم من «' + t + '» لـ«' + clip(o.value, 40) + '».'); }
+  else if (o.act === 'reopen') { st.snap(); x.status = 'todo'; delete x.completedAt; x.notified = false; st.say.push('رجّعت «' + t + '» مفتوحة.'); }
+  else if (o.act === 'pin') { st.snap(); x.pinned = !x.pinned; st.say.push((x.pinned ? 'ثبّتّ' : 'شيلت التثبيت من') + ' «' + t + '».'); }
+  else if (o.act === 'priority') { const v = ['urgent', 'high', 'normal', 'low'].includes(o.value) ? o.value : 'normal'; st.snap(); x.priority = v; st.say.push('خلّيت «' + t + '» أولويتها ' + PRIO_AR[v] + '.'); }
+  st.changed = true;
+}
+
+function addPlanTask(t, st){
+  let date = t.date || '', time = t.time || '';
+  if (time && !date) date = today();
+  const due = date ? date + 'T' + (time || '23:59') : '';
+  const x = MSA.tasksApi.blank({ title: clip(t.title, 200), type: t.type === 'note' ? 'note' : 'task', due, remind: time && due ? '0' : '', priority: t.priority || 'normal', desc: t.desc ? '<p>' + esc(t.desc) + '</p>' : '' });
+  st.snap(); S().tasks.unshift(x); st.changed = true; st.added.push(x);
+}
+
+async function runSummary(){
+  const k = today(), open = openTasks().filter(x => x.type !== 'note');
+  const td = open.filter(x => dueKey(x) === k), late = open.filter(x => U.toMs(x.due) != null && U.toMs(x.due) < Date.now() && dueKey(x) < k), nt = S().tasks.filter(x => x.type === 'note').length;
+  let money = '';
+  try { if (MSA.plus && MSA.plus.outstanding) { const o = MSA.plus.outstanding(); if (o.n) money = ' ولسه ليك مستحقات في ' + o.n + ' مشروع (حوالي ' + MSA.plus.fmt0(o.egp) + ' جنيه).'; } } catch (e) {}
+  const lines = ['• النهارده: ' + (td.length ? td.length + ' — ' + td.slice(0, 4).map(x => clip(x.title, 30)).join('، ') : 'مفيش مهام') , '• متأخرة: ' + (late.length ? late.length + ' — ' + late.slice(0, 3).map(x => clip(x.title, 30)).join('، ') : 'مفيش'), '• كل المهام المفتوحة: ' + open.length, '• الملاحظات: ' + nt];
+  await reply('النهارده عندك ' + (td.length ? cnt(td.length, WT) : 'مفيش مهام') + (late.length ? '، و' + cnt(late.length, WT) + ' متأخرة' : '') + '، وإجمالي المفتوح ' + open.length + '.' + money, { show: lines.join('\n') + (money ? '\n•' + money : '') });
+}
+
+EX.plan = async (r, text) => {
+  const st = { say: [], changed: false, added: [], before: null, snap(){ if (!this.before) this.before = JSON.parse(JSON.stringify(S().tasks)); } };
+  let aborted = false;
+  if (r.ai && r.say && r.ops.some(o => o.op !== 'say')) bubble('bot', r.say);
+  for (const o of (r.ops || [])) {
+    let res;
+    try {
+      if (o.op === 'tasks') res = await runTasksOp(o, st);
+      else if (o.op === 'one') res = await runOneOp(o, st);
+      else if (o.op === 'add') addPlanTask(o.task, st);
+      else if (o.op === 'summary') await runSummary();
+      else if (o.op === 'go') { if (MSA.views[o.view]) { MSA.go(o.view); st.say.push('فتحت ' + (NLP.NAME_AR[o.view] || o.view) + '.'); } }
+      else if (o.op === 'project') res = await EX.open_project({ query: o.query });
+      else if (o.op === 'search') res = await EX.search({ query: o.query });
+      else if (o.op === 'theme') res = await EX.theme({ value: o.value });
+      else if (o.op === 'lang') res = await EX.lang({ value: o.value });
+      else if (o.op === 'projects') { const ps = S().projects || []; await reply(o.act === 'count' ? 'عندك ' + ps.length + ' مشروع.' : (ps.length ? 'مشاريعك: ' + ps.slice(0, 8).map(p => clip(p.name, 30)).join('، ') + (ps.length > 8 ? ' وغيرهم (' + ps.length + ')' : '') + '.' : 'مفيش مشاريع لسه.'), { show: o.act === 'list' && ps.length ? ps.slice(0, 20).map((p, i) => (i + 1) + '. ' + clip(p.name, 50)).join('\n') : undefined }); }
+      else if (o.op === 'clients') { const names = Array.from(new Set((S().projects || []).map(clientOf).filter(Boolean))); await reply(o.act === 'count' ? 'عندك ' + names.length + ' عميل.' : (names.length ? 'العملاء: ' + names.slice(0, 10).join('، ') + (names.length > 10 ? ' وغيرهم (' + names.length + ')' : '') + '.' : 'مفيش عملاء مسجلين لسه.'), { show: o.act === 'list' && names.length ? names.slice(0, 25).map((p, i) => (i + 1) + '. ' + p).join('\n') : undefined }); }
+      else if (o.op === 'say') st.say.push(o.text);
+    } catch (e) { console.warn('plan op', o.op, e); st.say.push('حصلت مشكلة في جزء من الأمر.'); }
+    if (res && res.cancelled) { aborted = true; break; }
+  }
+  if (st.added.length) { st.say.unshift(st.added.length === 1 ? 'ضفت ' + (st.added[0].type === 'note' ? 'ملاحظة' : 'مهمة') + ' «' + clip(st.added[0].title, 50) + '»' + dueLine(st.added[0]).replace(' — ', ' ') + '.' : 'ضفت ' + st.added.length + ' عناصر: ' + st.added.map(x => '«' + clip(x.title, 26) + '»').join('، ') + '.'); }
+  if (st.changed) {
+    const before = st.before; saveAll();
+    pushUndo('آخر أمر (' + clip(text, 24) + ')', () => { S().tasks.length = 0; before.forEach(x => S().tasks.push(x)); });
+  }
+  if (st.say.length) await reply(st.say.join(' ') + (st.changed ? ' لو غلطت قول: تراجع.' : ''));
+  else if (r.ai && r.say && !r.ops.some(o => o.op !== 'say') ) await reply(r.say);
+  else if (r.ai && r.say && !st.changed && r.ops.every(o => ['tasks', 'projects', 'clients', 'summary'].includes(o.op))) { /* answered by the op replies */ }
+  return { ok: !aborted };
+};
+
+const AIERR = { auth: 'المفتاح مش مقبول عند مزوّد الذكاء الاصطناعي. راجعه في إعدادات المساعد.', limit: 'وصلت للحد المجاني عند مزوّد الذكاء الاصطناعي. جرب بعد شوية.', timeout: 'المساعد الذكي اتأخر في الرد. جرب تاني.', net: 'مقدرتش أوصل للمساعد الذكي. تأكد من الإنترنت.', http: 'المساعد الذكي رجّع خطأ.', parse: 'المساعد الذكي رد بحاجة مش مفهومة. جرب تصيغ الأمر بشكل تاني.' };
 EX.unknown = async (r, said) => {
-  await reply('مفهمتش الأمر. جرب مثلاً: ضيف مهمة، أو إيه مهامي النهارده، أو قول: إيه الأوامر.', { cls: 'warn' });
+  const ai = AI();
+  if (ai && ai.enabled() && navigator.onLine !== false) {
+    setState('thinking');
+    const res = await ai.ask(said, S(), now(), U.toMs);
+    if (res.plan) { const out = await EX.plan(res.plan, said); return Object.assign({}, out, { aiUsed: true }); }
+    await reply((AIERR[res.error] || AIERR.http) + (res.detail && res.error === 'http' ? ' (' + res.detail + ')' : ''), { cls: 'warn' }); return { ok: false };
+  }
+  const sg = SM() ? SM().suggest(said) : [];
+  const hint = ai && !ai.enabled() ? ' ولو عايزني أفهم أي صياغة حرة، فعّل «المساعد الذكي» من إعدادات المساعد الصوتي.' : '';
+  if (sg.length) {
+    await reply('مفهمتش الأمر بالظبط. تقصد حاجة زي: ' + sg.map(x => '«' + x + '»').join(' أو ') + '؟' + hint, { cls: 'warn' });
+    askUI(sg.map((x, i) => ({ act: 'sug', i, label: x })));
+    V._sug = sg; return { ok: false };
+  }
+  await reply('مفهمتش الأمر. قول مثلاً: ضيف مهمة، احذف كل المهام المنتهية، اعرض المهام المتأخرة، أو: إيه الأوامر.' + hint, { cls: 'warn' });
   return { ok: false };
 };
 
@@ -551,21 +671,52 @@ async function submit(text, via){
 }
 function run(text, via){
   const job = chain.then(async () => {
-    setState('thinking'); const r = NLP.parse(text, { now: now(), name: AN() }); let out;
+    setState('thinking'); let r = null, out;
+    try { const sm = SM(); r = sm && sm.pre(text, mctx()); } catch (e) { console.warn('smart.pre', e); r = null; }
+    if (!r) r = NLP.parse(text, { now: now(), name: AN() });
+    if (r.intent === 'unknown') { try { const sm = SM(); const p2 = sm && sm.post(text, mctx()); if (p2) r = p2; } catch (e) { console.warn('smart.post', e); } }
     try { const f = EX[r.intent] || EX.unknown; out = await f(r, text); }
     catch (e) { console.warn('voice exec', e); await reply('حصلت مشكلة وأنا بنفّذ الأمر. جرب تاني.', { cls: 'err' }); out = { ok: false }; }
     if (!(out && out.noLog) && r.intent !== 'empty' && r.intent !== 'yes' && r.intent !== 'no' && r.intent !== 'stop') { logEntry(text, r.intent, V.lastSay, !(out && out.ok === false)); try { MSA.save(); } catch (e) {} }
     if (V.open && !V.listening && !V.pending) setState('idle');
-    return { intent: r.intent, say: V.lastSay, ok: !(out && out.ok === false) };
+    return { intent: r.intent, say: V.lastSay, ok: !(out && out.ok === false), ai: !!(out && out.aiUsed) };
   });
   chain = job.catch(() => {});
   return job;
 }
 V.run = (text) => { build(); if (!V.open) { panel.hidden = false; V.open = true; fab && fab.classList.add('open'); gid('vcName').textContent = AN(); } bubble('me', text); return V.pending ? feedPending(text) : run(text, 'api'); };
-V.parse = (t) => NLP.parse(t, { now: now(), name: AN() });
+V.parse = (t) => { try { const p = SM() && SM().pre(t, mctx()); if (p) return p; } catch (e) {} const r = NLP.parse(t, { now: now(), name: AN() }); if (r.intent === 'unknown') { try { const p = SM() && SM().post(t, mctx()); if (p) return p; } catch (e) {} } return r; };
 
 /* ---------------- settings section ---------------- */
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? T('الآن', 'now') : m < 60 ? m + T(' د', 'm') : m < 1440 ? Math.round(m / 60) + T(' س', 'h') : Math.round(m / 1440) + T(' يوم', 'd'); };
+
+/* ---------------- optional smart (AI) mode UI ---------------- */
+function aiHTML(){
+  const A = window.VoiceAI; if (!A) return '';
+  const c = A.cfg(), sel = (v, l) => '<option value="' + v + '"' + (c.provider === v ? ' selected' : '') + '>' + esc(l) + '</option>';
+  return '<div class="vc-ai" id="vcAiBox" style="border:1px solid var(--line,rgba(128,128,128,.25));border-radius:12px;padding:12px;margin:4px 0 14px">' +
+    '<div style="font-weight:700;margin-bottom:4px">' + I('star', 'sm') + ' ' + esc(T('المساعد الذكي (اختياري) — يفهم أي صياغة', 'Smart mode (optional) — understands any wording')) + '</div>' +
+    '<div class="hint" style="margin-bottom:10px;line-height:1.7">' + esc(T('من غيره المساعد بيفهم أوامر كتير محليًا ومجانًا. لو فعّلته، الأوامر اللي مش مفهومة بتتبعت (مع عناوين مهامك وأسماء مشاريعك) لمزوّد الذكاء الاصطناعي اللي تختاره بمفتاحك أنت، وبعدين البرنامج هو اللي ينفّذ مع تأكيد قبل أي حذف وتراجع. المفتاح بيتخزن على الجهاز ده بس ومش بيتزامن ولا بيدخل النسخة الاحتياطية.', 'Without it the assistant understands many commands locally and free. If you enable it, commands it cannot understand are sent (with your task titles and project names) to the AI provider you choose, using YOUR key; the app then executes them with a confirmation before any delete, plus undo. The key is stored on this device only — never synced or backed up.')) + '</div>' +
+    '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="vcAiOn" ' + (c.on ? 'checked' : '') + '><span>' + esc(T('تفعيل المساعد الذكي', 'Enable smart mode')) + '</span></label>' +
+    '<div class="field"><label class="f">' + esc(T('المزوّد', 'Provider')) + '</label><select id="vcAiProv">' + sel('gemini', 'Google Gemini (' + T('فيه خطة مجانية', 'has a free tier') + ')') + sel('anthropic', 'Anthropic Claude') + sel('openai', 'OpenAI') + '</select></div>' +
+    '<div class="field"><label class="f">' + esc(T('مفتاح الـ API', 'API key')) + '</label><input type="password" id="vcAiKey" dir="ltr" autocomplete="off" value="' + esc(c.key) + '" placeholder="' + esc(T('الصق المفتاح هنا', 'Paste your key')) + '"></div>' +
+    '<div class="field"><label class="f">' + esc(T('النموذج (اختياري)', 'Model (optional)')) + '</label><input type="text" id="vcAiModel" dir="ltr" value="' + esc(c.model) + '" placeholder="' + esc(A.MODELS[c.provider]) + '"></div>' +
+    '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm" id="vcAiTest">' + esc(T('جرّب الاتصال', 'Test connection')) + '</button><span class="hint" id="vcAiSt"></span></div></div>';
+}
+function wireAI(el){
+  const A = window.VoiceAI; const g = id => $('#' + id, el); if (!A || !g('vcAiOn')) return;
+  const st = t => { const h = g('vcAiSt'); if (h) h.textContent = t; };
+  g('vcAiOn').onchange = e => { if (e.target.checked && !(A.cfg().key || '').trim()) { st(T('الصق المفتاح الأول.', 'Paste a key first.')); } A.save({ on: e.target.checked }); };
+  g('vcAiProv').onchange = e => { A.save({ provider: e.target.value }); g('vcAiModel').placeholder = A.MODELS[e.target.value]; };
+  g('vcAiKey').onchange = e => A.save({ key: e.target.value.trim() });
+  g('vcAiModel').onchange = e => A.save({ model: e.target.value.trim() });
+  g('vcAiTest').onclick = async () => {
+    A.save({ key: g('vcAiKey').value.trim(), model: g('vcAiModel').value.trim(), provider: g('vcAiProv').value }); const was = A.cfg().on; A.save({ on: true });
+    st(T('بجرّب…', 'Testing…'));
+    const r = await A.ask('قولي مرحبا', { tasks: [], projects: [] }, new Date(), U.toMs); A.save({ on: was });
+    st(r.plan ? T('تمام، الاتصال شغّال ✓', 'Connected ✓') : T('فشل: ', 'Failed: ') + ({ auth: T('المفتاح مرفوض', 'key rejected'), limit: T('تجاوزت الحد', 'rate limit'), net: T('مفيش اتصال', 'no connection'), timeout: T('انتهت المهلة', 'timeout'), parse: T('رد غير مفهوم', 'bad reply'), http: T('خطأ من المزوّد', 'provider error') }[r.error] || r.error));
+  };
+}
 MSA.voiceHTML = () => {
   const c = cfg(), d = dev(), eng = engineName(), L = S().voiceLog || [];
   const chk = (id, on, label) => '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="' + id + '" ' + (on ? 'checked' : '') + '><span>' + esc(label) + '</span></label>';
@@ -584,6 +735,7 @@ MSA.voiceHTML = () => {
       '<div class="hint" id="vcEngHint" style="margin-top:6px">' + esc(T(ENGINE_LABEL[eng][0], ENGINE_LABEL[eng][1])) + '</div></div>' +
     chk('vcCf', c.confirm, T('اطلب تأكيد قبل الحذف وتسجيل الدفعات', 'Ask to confirm before deleting or recording payments')) +
     '<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:14px"><button class="btn sm" id="vcTest">' + I('volume', 'sm') + esc(T('جرّب الصوت', 'Test voice')) + '</button><button class="btn sm primary" id="vcTry">' + I('mic', 'sm') + esc(T('افتح المساعد', 'Open assistant')) + '</button></div>' +
+    aiHTML() +
     '<div class="hint" style="margin-bottom:6px"><b>' + esc(T('أمثلة الأوامر', 'Command examples')) + '</b> — ' + esc(T('اختصار الكيبورد: Alt+M', 'Keyboard: Alt+M')) + '</div>' +
     '<div class="vc-cmds">' + NLP.COMMANDS.map(g => '<div><b>' + esc(g.g) + '</b>: ' + g.ex.map(e => '«' + esc(e) + '»').join(' · ') + '</div>').join('') + '</div>' +
     '<div class="hint" style="margin:12px 0 6px"><b>' + esc(T('آخر الأوامر', 'Recent commands')) + '</b></div>' +
@@ -610,6 +762,7 @@ MSA.wireVoice = (el, redraw) => {
   g('vcEng').onchange = e => { setDev({ engine: e.target.value }); const h = g('vcEngHint'); const k = engineName(); if (h) h.textContent = T(ENGINE_LABEL[k][0], ENGINE_LABEL[k][1]); };
   g('vcTest').onclick = () => { speak('أهلاً، أنا ' + AN() + '. دي تجربة الصوت. أقدر أساعدك في مهامك ومشاريعك.', true); };
   g('vcTry').onclick = () => { if (!c.on) { c.on = true; MSA.save(); V.refresh(); } openPanel(false); };
+  wireAI(el);
   const cl = g('vcClr'); if (cl) cl.onclick = () => { S().voiceLog = []; MSA.save(); redraw && redraw(); };
 };
 const $$$ = (s, r) => Array.from((r || document).querySelectorAll(s));
