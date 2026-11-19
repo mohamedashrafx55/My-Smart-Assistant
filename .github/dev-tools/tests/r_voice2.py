@@ -30,6 +30,15 @@ async def ask_and(pg, text, answer):
     await pg.evaluate("t=>MSA.voice.run(t)", answer)
     r = await first; return r, q
 
+async def _local_ok(pg, rounds):
+    n=len(rounds); await run(pg,'ضيف مهمة تجربة محلية'); return len(rounds)==n
+
+async def _wizard(pg):
+    await pg.evaluate("MSA.voice.aiSetup()"); await pg.wait_for_timeout(300)
+    okay = await pg.evaluate("!!document.getElementById('aiwKey')&&!!document.getElementById('aiwOpen')&&document.querySelectorAll('#aiwProv button').length===2")
+    await pg.evaluate("MSA.closeAllOverlays()")
+    return okay and await pg.evaluate("!VoiceAI.hasKey()||VoiceAI.cfg().key==='AIzaSyTESTKEY12345'")
+
 async def main():
     async with Env() as e:
         pg = await e.page(w=1100, h=800)
@@ -108,6 +117,7 @@ async def main():
         calls = []
         async def handler(route):
             req = route.request; calls.append({'url':req.url,'headers':req.headers,'body':req.post_data})
+            if req.method=='GET': await route.fulfill(status=200,content_type='application/json',headers={'access-control-allow-origin':'*'},body=json.dumps({"models":[{"name":"models/gemini-2.5-flash","supportedGenerationMethods":["generateContent"]},{"name":"models/gemini-3-flash","supportedGenerationMethods":["generateContent"]}]})); return
             body = json.loads(req.post_data)
             txt = json.dumps({"say":"تمام هحذف المهام المنتهية","ops":[{"op":"tasks","act":"delete","filter":{"type":"task","status":"done"}}]})
             if 'anthropic' in req.url: out={"content":[{"type":"text","text":txt}]}
@@ -117,9 +127,10 @@ async def main():
         await pg.route('**/generativelanguage.googleapis.com/**', handler); await pg.route('**/api.anthropic.com/**', handler); await pg.route('**/api.openai.com/**', handler)
         await run(pg,'تراجع') if False else None
         r = await run(pg,'نضفلي اللي خلص من الدنيا'); ok('AI off: nothing is sent anywhere', len(calls)==0, calls)
-        await pg.evaluate("VoiceAI.save({on:true,provider:'gemini',key:'AIzaSyTESTKEY12345',model:''})")
+        await pg.evaluate("VoiceAI.save({provider:'gemini',key:'AIzaSyTESTKEY12345',model:'',off:false})")
         ok('key is NOT in the synced state or backups', await pg.evaluate("!JSON.stringify(MSA.state).includes('AIzaSyTESTKEY12345')&&!(localStorage.getItem('msa_state_v1')||'').includes('AIzaSyTESTKEY12345')"))
         r, q = await ask_and(pg,'نضفلي اللي خلص من الدنيا','أيوه')
+        calls[:] = [c for c in calls if c['body']]
         ok('AI request went to Gemini with the key in a header (not the URL)', len(calls)==1 and 'generativelanguage' in calls[0]['url'] and calls[0]['headers'].get('x-goog-api-key')=='AIzaSyTESTKEY12345' and 'AIzaSyTESTKEY12345' not in calls[0]['url'], calls[:1])
         ok('request carries today + the sentence + task titles', all(x in calls[0]['body'] for x in ['TODAY','نضفلي اللي خلص','تصميم بوستر']))
         ok('AI plan executed with confirmation (done tasks removed, others kept)', 'tE' not in await ids(pg) and 'tB' in await ids(pg), await ids(pg))
@@ -136,7 +147,7 @@ async def main():
         # errors
         async def err401(route): await route.fulfill(status=401,content_type='application/json',headers={'access-control-allow-origin':'*'},body='{"error":{"message":"bad key"}}')
         await pg.unroute('**/api.openai.com/**'); await pg.route('**/api.openai.com/**', err401)
-        r = await run(pg,'نضفلي اللي خلص من الدنيا'); b = await lastBot(pg); ok('401 gives a clear key message', 'المفتاح' in b, b)
+        r = await run(pg,'نضفلي اللي خلص من الدنيا'); b = await lastBot(pg); ok('401 gives a clear key message', 'مفتاح' in b, b)
         async def junk(route): await route.fulfill(status=200,content_type='application/json',headers={'access-control-allow-origin':'*'},body=json.dumps({"choices":[{"message":{"content":"مش json"}}]}))
         await pg.unroute('**/api.openai.com/**'); await pg.route('**/api.openai.com/**', junk)
         r = await run(pg,'نضفلي اللي خلص من الدنيا'); b = await lastBot(pg); ok('garbage reply is handled', 'مفهومة' in b or 'تصيغ' in b, b)
@@ -145,17 +156,71 @@ async def main():
         await pg.unroute('**/api.openai.com/**'); await pg.route('**/api.openai.com/**', answer)
         before = await ids(pg); r = await run(pg,'ايه رايك في حالتي'); b = await lastBot(pg)
         ok('AI question answered in chat, data untouched', 'ركز' in b and await ids(pg)==before, b)
-        await pg.evaluate("VoiceAI.save({on:false,key:''})")
+
+        # ---- AI is the main brain: routing, agent loop, tabs, safety ----
+        rounds = []
+        async def agent(route):
+            req = route.request
+            if req.method=='GET': await route.fulfill(status=200,content_type='application/json',headers={'access-control-allow-origin':'*'},body='{"models":[]}'); return
+            b = json.loads(req.post_data); msgs = b.get('contents') or []
+            txt = json.dumps(b)
+            rounds.append(txt)
+            if 'RESULTS: ' in txt:
+                out = {"say":"فتحت الحاجة","ops":[{"op":"open","n":1}]}
+            elif 'اقفل' in txt and 'REPLY_UI' in txt: out = {"say":"x","ops":[]}
+            else:
+                out = {"say":"بدوّر","read":[{"tool":"find","q":"بوستر","scope":"tasks"}],"ops":[]}
+            await route.fulfill(status=200,content_type='application/json',headers={'access-control-allow-origin':'*'},body=json.dumps({"candidates":[{"content":{"parts":[{"text":json.dumps(out)}]}}]}))
+        await pg.unroute('**/generativelanguage.googleapis.com/**'); await pg.route('**/generativelanguage.googleapis.com/**', agent)
+        await pg.evaluate("VoiceAI.save({provider:'gemini',key:'AIzaSyTESTKEY12345',model:'',off:false,aiOnly:false})")
+        await pg.evaluate("MSA.go('home')")
+        r = await run(pg,'دوّرلي على بوستر وافتحه')
+        ok('agent loop: AI asked for a find, got RESULTS, then replied with an open op', len(rounds)>=2 and 'RESULTS: ' in rounds[-1], (len(rounds), r, await lastBot(pg)))
+        ok('local simple command stays local (no AI call)', await _local_ok(pg, rounds))
+        # pause flag => nothing leaves the device
+        await pg.evaluate("VoiceAI.save({off:true})"); n0=len(rounds); await run(pg,'رتبلي الدنيا كلها'); ok('paused smart mode sends nothing', len(rounds)==n0)
+        await pg.evaluate("VoiceAI.save({off:false})")
+        # ui_click safety
+        s2 = await pg.evaluate("j=>VoiceAI.sanitize(j,MSA.state)", {"say":"x","ops":[{"op":"ui_click","label":"احذف كل البيانات"},{"op":"ui_click","label":"المصاريف"}]})
+        ok('sanitizer keeps ui_click ops', s2 is not None and any(o['op']=='ui_click' for o in s2['ops']), s2)
+        await pg.evaluate("MSA.go('settings')"); await pg.wait_for_timeout(300)
+        r = await pg.evaluate("""async()=>{const v=MSA.voice;const before=JSON.stringify(MSA.state.tasks.length);const out=await v.run('x');return 1}""") if False else None
+        ok('wizard opens and never stores a key before success', await _wizard(pg))
+        await pg.evaluate("VoiceAI.save({key:'',off:false,aiOnly:false})")
+
+        # ---- ui_click: opens a real tab, refuses destructive labels
+        await pg.evaluate("VoiceAI.save({provider:'gemini',key:'AIzaSyTESTKEY12345',model:'',off:false,aiOnly:false})")
+        await pg.evaluate("MSA.go('settings')"); await pg.wait_for_timeout(400)
+        lab = await pg.evaluate("(()=>{const e=Array.from(document.querySelectorAll('.sec>h4')).find(h=>h.offsetWidth&&h.textContent.trim().length>2&&!/حذف|مسح/.test(h.textContent));return e?e.textContent.trim():''})()")
+        plan = {"say":"x","ops":[{"op":"ui_click","label":lab}]}
+        async def clickmock(route):
+            if route.request.method=='GET': await route.fulfill(status=200,content_type='application/json',headers={'access-control-allow-origin':'*'},body='{"models":[]}'); return
+            await route.fulfill(status=200,content_type='application/json',headers={'access-control-allow-origin':'*'},body=json.dumps({"candidates":[{"content":{"parts":[{"text":json.dumps(CUR[0])}]}}]}))
+        CUR=[plan]
+        await pg.unroute('**/generativelanguage.googleapis.com/**'); await pg.route('**/generativelanguage.googleapis.com/**', clickmock)
+        await run(pg,'اطلعلي على القسم ده'); b = await lastBot(pg)
+        ok('ui_click finds a visible section by its label', 'فتحت' in b, (lab,b))
+        CUR[0] = {"say":"x","ops":[{"op":"ui_click","label":"مسح كل البيانات"}]}
+        before = await pg.evaluate("JSON.stringify(MSA.state.tasks.length)+JSON.stringify(MSA.state.projects.length)")
+        await run(pg,'اطلعلي على القسم ده'); b = await lastBot(pg)
+        ok('ui_click refuses delete/clear labels', 'مش هضغط' in b and await pg.evaluate("JSON.stringify(MSA.state.tasks.length)+JSON.stringify(MSA.state.projects.length)")==before, b)
+        CUR[0] = {"say":"x","ops":[{"op":"ui_click","label":"تبويب مش موجود خالص"}]}
+        await run(pg,'اطلعلي على القسم ده'); b = await lastBot(pg)
+        ok('ui_click reports a missing tab instead of failing', 'مالقيتش' in b, b)
+        CUR[0] = {"say":"x","ops":[{"op":"project_add","name":"مشروع الذكاء","client":"عميل تجريبي"}]}
+        n0 = await pg.evaluate("MSA.state.projects.length"); await run(pg,'اعمل مشروع'); 
+        ok('project_add creates a project', await pg.evaluate("MSA.state.projects.length")==n0+1)
+        await run(pg,'تراجع'); ok('project_add is undoable', await pg.evaluate("MSA.state.projects.length")==n0)
+        await pg.evaluate("VoiceAI.save({key:'',off:false,aiOnly:false})")
 
         # ---- settings UI
         await pg.evaluate("MSA.voice.close&&MSA.voice.close(); MSA.go('settings')"); await pg.wait_for_timeout(500)
         ok('settings shows the smart-mode box', await pg.evaluate("!!document.getElementById('vcAiBox')&&!!document.getElementById('vcAiKey')"))
         await pg.fill('#vcAiKey','AIzaSyUIKEY123456'); await pg.evaluate("document.getElementById('vcAiKey').dispatchEvent(new Event('change'))")
-        await pg.evaluate("(()=>{const c=document.getElementById('vcAiOn');c.checked=true;c.dispatchEvent(new Event('change'))})()")
-        ok('UI saves key + toggle to this device only', await pg.evaluate("VoiceAI.enabled()&&VoiceAI.cfg().key==='AIzaSyUIKEY123456'&&!JSON.stringify(MSA.state).includes('AIzaSyUIKEY123456')"))
-        await pg.evaluate("VoiceAI.save({on:false,key:''})")
+        ok('UI saves the key to this device only (key = enabled)', await pg.evaluate("VoiceAI.enabled()&&VoiceAI.cfg().key==='AIzaSyUIKEY123456'&&!JSON.stringify(MSA.state).includes('AIzaSyUIKEY123456')"))
+        await pg.evaluate("VoiceAI.save({key:'',off:false,aiOnly:false})")
         pe = await e.page(w=390,h=800,lang='en'); await pe.evaluate(PRE); await pe.evaluate("MSA.go('settings')"); await pe.wait_for_timeout(500)
-        ok('English settings render the smart-mode box without overflow', await pe.evaluate("/Smart mode/.test(document.getElementById('vcAiBox').textContent)&&document.documentElement.scrollWidth<=innerWidth+1"))
+        ok('English settings render the smart-mode box without overflow', await pe.evaluate("/Smart assistant/.test(document.getElementById('vcAiBox').textContent)&&document.documentElement.scrollWidth<=innerWidth+1"))
         errs = pg.errs + pe.errs; ok('no page errors', not errs, errs[:4])
     return summary()
 sys.exit(asyncio.run(main()))

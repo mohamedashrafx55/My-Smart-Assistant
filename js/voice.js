@@ -202,9 +202,10 @@ function build(){
   if (panel) return;
   panel = document.createElement('div'); panel.id = 'vcPanel'; panel.className = 'vc-panel'; panel.hidden = true; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', T('المساعد الصوتي', 'Voice assistant'));
   panel.innerHTML =
-    '<div class="vc-head"><span class="vc-dot"></span><b id="vcName"></b><span id="vcState" class="vc-state"></span><span class="vc-sp"></span>' +
+    '<div class="vc-head"><span class="vc-dot"></span><b id="vcName"></b><span id="vcAiTag" class="vc-aitag" hidden title="' + esc(T('المساعد الذكي شغال', 'Smart mode is on')) + '">AI</span><span id="vcState" class="vc-state"></span><span class="vc-sp"></span>' +
       '<button class="icon-btn sm" data-vc="stop" title="' + esc(T('إسكات الصوت', 'Silence')) + '">' + I('volume', 'sm') + '</button>' +
       '<button class="icon-btn sm" data-vc="close" aria-label="' + esc(T('إغلاق', 'Close')) + '">' + I('x', 'sm') + '</button></div>' +
+    '<button class="vc-aibar" id="vcAiBar" data-vc="aisetup" hidden>' + I('star', 'sm') + '<span>' + esc(T('فعّل المساعد الذكي (مجاني) عشان يفهم أي أمر ← اضغط هنا', 'Turn on the free smart mode so it understands any command → tap here')) + '</span></button>' +
     '<div class="vc-log" id="vcLog" aria-live="polite"></div>' +
     '<div class="vc-ask" id="vcAsk"></div>' +
     '<div class="vc-live" id="vcLive" dir="auto"></div>' +
@@ -223,6 +224,7 @@ function build(){
     else if (a === 'yes') answer(true);
     else if (a === 'no') answer(false);
     else if (a === 'pick') answer(+b.dataset.i);
+    else if (a === 'aisetup') V.aiSetup();
     else if (a === 'sug') { const t = (V._sug || [])[+b.dataset.i]; clearAsk(); if (t) { const i = gid('vcIn'); i.value = t; sendTyped(); } }
   });
   gid('vcIn').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendTyped(); } else if (e.key === 'Escape') closePanel(); });
@@ -234,12 +236,13 @@ function buildFab(){
   fab.innerHTML = I('mic'); document.body.appendChild(fab);
   fab.addEventListener('click', () => { if (V.open) closePanel(); else openPanel(true); });
 }
+function aiBar(){ const A = window.VoiceAI; const b = gid('vcAiBar'), t = gid('vcAiTag'); if (b) b.hidden = !!(A && A.hasKey()); if (t) t.hidden = !(A && A.enabled()); }
 function syncFab(){ buildFab(); fab.hidden = !cfg().on; if (!cfg().on && V.open) closePanel(); }
 V.refresh = () => { syncFab(); const n = gid('vcName'); if (n) n.textContent = AN(); };
 
 function openPanel(autoMic){
   if (!cfg().on) return; build(); panel.hidden = false; V.open = true; fab && fab.classList.add('open');
-  gid('vcName').textContent = AN(); setState('idle');
+  gid('vcName').textContent = AN(); setState('idle'); aiBar();
   if (!gid('vcLog').children.length) bubble('bot', 'أهلاً يا ' + (S().profile.name || '').split(' ')[0] + '، أنا ' + AN() + '. قولّي تحب أعمل إيه، أو اكتب الأمر.');
   setTimeout(() => { const i = gid('vcIn'); if (i && !autoMic) i.focus(); }, 30);
   if (autoMic) { V.voiceMode = true; micToggle(); }
@@ -607,8 +610,92 @@ async function runSummary(){
   await reply('النهارده عندك ' + (td.length ? cnt(td.length, WT) : 'مفيش مهام') + (late.length ? '، و' + cnt(late.length, WT) + ' متأخرة' : '') + '، وإجمالي المفتوح ' + open.length + '.' + money, { show: lines.join('\n') + (money ? '\n•' + money : '') });
 }
 
+
+/* ---- read-only tools the AI can call (results go back to the model) ---- */
+const normT = s => NLP.norm1(s);
+function visibleTabs(){
+  const root = document.getElementById('view') || document.getElementById('app') || document.body, out = [], seen = new Set();
+  const sel = '[role=tab],.pchip,.seg button,[data-mt],[data-uw=tab],.sg-tab,[data-ex-tab],.tabs-scroll button,.sec>h4,.sec>h3,.vc-tab,.ltab,[data-ltab],.home-tab,[data-htab]';
+  Array.from(root.querySelectorAll(sel)).forEach(el => {
+    if (el.closest('#vcPanel,.overlay,.drawer-wrap')) return; if (!(el.offsetWidth || el.offsetHeight || el.getClientRects().length)) return;
+    const label = (el.getAttribute('aria-label') || el.textContent || '').replace(/\s+/g, ' ').trim(); if (!label || label.length > 60 || seen.has(label)) return; seen.add(label);
+    out.push({ el, label, kind: /^H[34]$/.test(el.tagName) ? 'section' : 'tab', on: el.classList.contains('on') || el.getAttribute('aria-selected') === 'true' });
+  });
+  return out.slice(0, 40);
+}
+const DANGER = /(حذف|مسح|ازال|إزال|تصفير|مسح الكل|delete|remove|clear|reset|logout|خروج|تسجيل الخروج|wipe)/i;
+const finds = () => V._finds || (V._finds = []);
+function toolFind(q, scope){
+  const P = MSA.plus; let hits = (P && P.search ? P.search(q) : []);
+  if (!hits.length && q.split(/\s+/).length > 1) { const seen = new Set(); q.split(/\s+/).forEach(w => (P.search(w) || []).forEach(h => { if (!seen.has(h)) { seen.add(h); hits.push(h); } })); }
+  const want = { tasks: ['task'], notes: ['note'], projects: ['project'], clients: ['client'], files: ['file'], videos: ['video'] }[scope];
+  if (want) hits = hits.filter(h => want.includes(h.g));
+  hits = hits.slice().sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 12);
+  const out = hits.map(h => ({ g: h.g, title: clip(h.title, 70), sub: clip(h.sub || '', 70), go: h.go }));
+  if (!want || want.includes('file')) { const toks = normT(q).split(/\s+/).filter(Boolean); ((S().vault || {}).items || []).filter(x => x.t === 'f' && toks.every(t => normT(x.name).includes(t))).slice(0, 5).forEach(x => out.push({ g: 'file', title: clip(x.name, 70), sub: 'ملفاتي', go: () => { MSA.go('files'); } })); }
+  V._finds = out.slice(0, 15);
+  return V._finds.map((h, i) => ({ n: i + 1, g: h.g, title: h.title, sub: h.sub }));
+}
+function toolProject(query){
+  const res = NLP.best(S().projects || [], query, projText); if (!res.length) return { found: false };
+  const p = res[0].item, P = MSA.plus && MSA.plus.pay;
+  const cur = P ? P.cur(p) : 'EGP', r = { found: true, name: p.name, client: clientOf(p), status: p.status === 'done' ? 'done' : 'active', currency: cur };
+  if (P) { r.total = Math.round(P.total(p)); r.paid = Math.round(P.paid(p)); r.remaining = Math.round(P.remaining(p)); try { r.late = P.isLate(p); } catch (e) {} }
+  r.payments = ((p.pay && p.pay.items) || []).slice(-5).map(x => ({ date: x.date, amount: x.amt }));
+  try { const leaves = MSA.proj.flatLeaves ? MSA.proj.flatLeaves(p.steps) : []; r.steps = leaves.length || undefined; } catch (e) {}
+  if (res.length > 1) r.otherMatches = res.slice(1, 4).map(x => x.item.name);
+  return r;
+}
+function toolStats(){
+  const k = today(), tasks = S().tasks.filter(x => !x.routine), open = tasks.filter(x => x.status !== 'done' && x.type !== 'note');
+  const o = MSA.plus && MSA.plus.outstanding ? MSA.plus.outstanding() : null, ps = S().projects || [];
+  return { openTasks: open.length, dueToday: open.filter(x => dueKey(x) === k).length, overdue: open.filter(x => U.toMs(x.due) != null && U.toMs(x.due) < Date.now() && dueKey(x) < k).length, notes: tasks.filter(x => x.type === 'note').length, doneTasks: tasks.filter(x => x.status === 'done' && x.type !== 'note').length, projectsActive: ps.filter(p => p.status !== 'done').length, projectsDone: ps.filter(p => p.status === 'done').length, clients: Array.from(new Set(ps.map(clientOf).filter(Boolean))).length, outstanding: o ? { projects: o.n, egp: Math.round(o.egp), late: o.late } : null, files: ((S().vault || {}).items || []).filter(x => x.t === 'f').length, view: MSA.view };
+}
+function aiToolRun(t){
+  if (t.tool === 'find') return toolFind(t.q || '', t.scope || 'all');
+  if (t.tool === 'ui') { const items = visibleTabs(); V._ui = items; return { view: MSA.view, items: items.map((x, i) => ({ n: i + 1, label: x.label, kind: x.kind, active: x.on || undefined })) }; }
+  if (t.tool === 'project') return toolProject(t.query || '');
+  if (t.tool === 'stats') return toolStats();
+  if (t.tool === 'tasks') return SM().match(S().tasks, t.filter, mctx()).sort(sortDue).slice(0, 40).map(x => ({ id: x.id, title: clip(x.title, 60), type: x.type === 'note' ? 'note' : 'task', status: x.status === 'done' ? 'done' : 'open', due: x.due || '', priority: x.priority !== 'normal' ? x.priority : undefined }));
+  return { error: 'unknown tool' };
+}
+
+async function uiClick(label, st){
+  if (DANGER.test(label)) { st.say.push('مش هضغط على «' + clip(label, 30) + '» لأنه أمر حذف أو مسح.'); return; }
+  const items = visibleTabs(), q = normT(label);
+  let hit = items.find(x => normT(x.label) === q) || items.find(x => normT(x.label).includes(q) || q.includes(normT(x.label)));
+  if (!hit) { const b = NLP.best(items, label, x => x.label); if (b.length) hit = b[0].item; }
+  if (!hit) { st.say.push('مالقيتش تبويب أو قسم اسمه «' + clip(label, 30) + '» على الشاشة دي' + (items.length ? '. المتاح: ' + items.slice(0, 8).map(x => x.label).join('، ') : '') + '.'); return { ok: false }; }
+  if (DANGER.test(hit.label)) { st.say.push('مش هضغط على «' + clip(hit.label, 30) + '».'); return; }
+  if (hit.kind === 'section') { hit.el.scrollIntoView && hit.el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } else hit.el.click();
+  await new Promise(r => setTimeout(r, 250));
+  st.say.push('فتحت «' + clip(hit.label, 40) + '».');
+}
+
+async function planProjectAdd(o, st){
+  const dup = (S().projects || []).find(p => normT(p.name) === normT(o.name));
+  if (dup) { const ok = await confirm('فيه مشروع بنفس الاسم «' + clip(o.name, 40) + '». أعمل واحد جديد برضه؟', true); if (!ok) { st.say.push('تمام، مضفتش المشروع.'); return; } }
+  const pr = { id: U.uid('p'), name: o.name, created: Date.now(), status: 'active', steps: MSA.proj && MSA.proj.makeSteps ? MSA.proj.makeSteps('blank') : [] };
+  if (o.client) { pr.client = o.client; try { MSA.clients.ensure(o.client); } catch (e) {} }
+  if (o.total > 0) pr.time = { fixed: o.total, rate: 0, entries: [], extras: [], cur: o.currency || 'EGP' };
+  S().projects.unshift(pr); st.changed = true; st.undo.push(() => { const i = S().projects.findIndex(x => x.id === pr.id); if (i >= 0) S().projects.splice(i, 1); });
+  try { MSA.updateCounts && MSA.updateCounts(); } catch (e) {}
+  st.say.push('عملت مشروع «' + clip(o.name, 40) + '»' + (o.client ? ' للعميل ' + o.client : '') + (o.total > 0 ? ' بإجمالي ' + o.total + ' ' + (CUR_AR[o.currency || 'EGP'] || '') : '') + '.');
+}
+async function planProjectSet(o, st){
+  const p = await pickOne(S().projects || [], o.project, projText, 'مشروع'); if (!p) return { noLog: true };
+  const before = JSON.parse(JSON.stringify(p)), ch = [];
+  if (o.set.name) { p.name = o.set.name; ch.push('الاسم'); }
+  if (o.set.client) { p.client = o.set.client; try { MSA.clients.ensure(o.set.client); } catch (e) {} ch.push('العميل'); }
+  if (o.set.status && o.set.status !== (p.status === 'done' ? 'done' : 'active')) { p.status = o.set.status; if (p.status === 'done') p.doneAt = Date.now(); else delete p.doneAt; ch.push(p.status === 'done' ? 'اتحوّل لمكتمل' : 'رجع قيد التنفيذ'); }
+  if (!ch.length) { st.say.push('مفيش تغيير على «' + clip(p.name, 40) + '».'); return; }
+  st.changed = true; st.undo.push(() => { const i = S().projects.findIndex(x => x.id === p.id); if (i >= 0) S().projects[i] = before; });
+  try { MSA.updateCounts && MSA.updateCounts(); } catch (e) {}
+  st.say.push('«' + clip(p.name, 40) + '»: ' + ch.join('، ') + '.');
+}
+
 EX.plan = async (r, text) => {
-  const st = { say: [], changed: false, added: [], before: null, snap(){ if (!this.before) this.before = JSON.parse(JSON.stringify(S().tasks)); } };
+  const st = { say: [], changed: false, added: [], before: null, undo: [], snap(){ if (!this.before) this.before = JSON.parse(JSON.stringify(S().tasks)); } };
   let aborted = false;
   if (r.ai && r.say && r.ops.some(o => o.op !== 'say')) bubble('bot', r.say);
   for (const o of (r.ops || [])) {
@@ -626,13 +713,20 @@ EX.plan = async (r, text) => {
       else if (o.op === 'projects') { const ps = S().projects || []; await reply(o.act === 'count' ? 'عندك ' + ps.length + ' مشروع.' : (ps.length ? 'مشاريعك: ' + ps.slice(0, 8).map(p => clip(p.name, 30)).join('، ') + (ps.length > 8 ? ' وغيرهم (' + ps.length + ')' : '') + '.' : 'مفيش مشاريع لسه.'), { show: o.act === 'list' && ps.length ? ps.slice(0, 20).map((p, i) => (i + 1) + '. ' + clip(p.name, 50)).join('\n') : undefined }); }
       else if (o.op === 'clients') { const names = Array.from(new Set((S().projects || []).map(clientOf).filter(Boolean))); await reply(o.act === 'count' ? 'عندك ' + names.length + ' عميل.' : (names.length ? 'العملاء: ' + names.slice(0, 10).join('، ') + (names.length > 10 ? ' وغيرهم (' + names.length + ')' : '') + '.' : 'مفيش عملاء مسجلين لسه.'), { show: o.act === 'list' && names.length ? names.slice(0, 25).map((p, i) => (i + 1) + '. ' + p).join('\n') : undefined }); }
       else if (o.op === 'say') st.say.push(o.text);
+      else if (o.op === 'ui_click') res = await uiClick(o.label, st);
+      else if (o.op === 'open') { const h = finds()[o.n - 1]; if (h && h.go) { h.go(); st.say.push('فتحت «' + clip(h.title, 40) + '».'); } else st.say.push('مفيش نتيجة رقم ' + o.n + ' أفتحها.'); }
+      else if (o.op === 'project_add') await planProjectAdd(o, st);
+      else if (o.op === 'project_set') res = await planProjectSet(o, st);
+      else if (o.op === 'payment_add') res = await EX.add_payment({ amount: o.amount, who: o.project, cur: '' });
+      else if (o.op === 'action') { const rr = MSA.sync && MSA.sync.info && MSA.sync.info().linked ? await MSA.sync.run({ force: true }) : null; st.say.push(rr ? (rr.error ? 'المزامنة فشلت: ' + rr.error : 'اتعملت مزامنة.') : 'المزامنة مش مفعّلة على الجهاز ده.'); }
+      else if (o.op === 'setting') { cfg()[o.key] = !!o.value; MSA.save(); st.say.push((o.key === 'tts' ? 'الرد الصوتي' : 'طلب التأكيد') + (o.value ? ' شغّال.' : ' متوقف.')); }
     } catch (e) { console.warn('plan op', o.op, e); st.say.push('حصلت مشكلة في جزء من الأمر.'); }
     if (res && res.cancelled) { aborted = true; break; }
   }
   if (st.added.length) { st.say.unshift(st.added.length === 1 ? 'ضفت ' + (st.added[0].type === 'note' ? 'ملاحظة' : 'مهمة') + ' «' + clip(st.added[0].title, 50) + '»' + dueLine(st.added[0]).replace(' — ', ' ') + '.' : 'ضفت ' + st.added.length + ' عناصر: ' + st.added.map(x => '«' + clip(x.title, 26) + '»').join('، ') + '.'); }
   if (st.changed) {
-    const before = st.before; saveAll();
-    pushUndo('آخر أمر (' + clip(text, 24) + ')', () => { S().tasks.length = 0; before.forEach(x => S().tasks.push(x)); });
+    const before = st.before, extra = st.undo.slice(); saveAll();
+    pushUndo('آخر أمر (' + clip(text, 24) + ')', () => { if (before) { S().tasks.length = 0; before.forEach(x => S().tasks.push(x)); } extra.reverse().forEach(f => { try { f(); } catch (e) {} }); });
   }
   if (st.say.length) await reply(st.say.join(' ') + (st.changed ? ' لو غلطت قول: تراجع.' : ''));
   else if (r.ai && r.say && !r.ops.some(o => o.op !== 'say') ) await reply(r.say);
@@ -640,23 +734,31 @@ EX.plan = async (r, text) => {
   return { ok: !aborted };
 };
 
-const AIERR = { auth: 'المفتاح مش مقبول عند مزوّد الذكاء الاصطناعي. راجعه في إعدادات المساعد.', limit: 'وصلت للحد المجاني عند مزوّد الذكاء الاصطناعي. جرب بعد شوية.', timeout: 'المساعد الذكي اتأخر في الرد. جرب تاني.', net: 'مقدرتش أوصل للمساعد الذكي. تأكد من الإنترنت.', http: 'المساعد الذكي رجّع خطأ.', parse: 'المساعد الذكي رد بحاجة مش مفهومة. جرب تصيغ الأمر بشكل تاني.' };
+const AIERR = { auth: 'مفتاح المساعد الذكي مش مقبول. راجعه من إعدادات المساعد الصوتي.', limit: 'وصلت للحد المجاني عند مزوّد الذكاء الاصطناعي دلوقتي.', timeout: 'المساعد الذكي اتأخر في الرد.', net: 'مقدرتش أوصل للمساعد الذكي (النت؟).', http: 'المساعد الذكي رجّع خطأ.', model: 'النموذج المختار مش متاح عند المزوّد.', parse: 'المساعد الذكي رد بحاجة مش مفهومة.' };
+async function aiAsk(text){
+  const ai = AI(); setState('thinking');
+  const res = await ai.ask(text, S(), now(), U.toMs, { view: MSA.view, run: aiToolRun });
+  return res;
+}
+EX.ai = async (text) => {
+  const res = await aiAsk(text);
+  if (res.plan) { const out = await EX.plan(res.plan, text); return Object.assign({}, out, { handled: true, aiUsed: true }); }
+  V._aiErr = res; return { handled: false, err: res };
+};
 EX.unknown = async (r, said) => {
   const ai = AI();
-  if (ai && ai.enabled() && navigator.onLine !== false) {
-    setState('thinking');
-    const res = await ai.ask(said, S(), now(), U.toMs);
-    if (res.plan) { const out = await EX.plan(res.plan, said); return Object.assign({}, out, { aiUsed: true }); }
-    await reply((AIERR[res.error] || AIERR.http) + (res.detail && res.error === 'http' ? ' (' + res.detail + ')' : ''), { cls: 'warn' }); return { ok: false };
-  }
   const sg = SM() ? SM().suggest(said) : [];
-  const hint = ai && !ai.enabled() ? ' ولو عايزني أفهم أي صياغة حرة، فعّل «المساعد الذكي» من إعدادات المساعد الصوتي.' : '';
+  const noKey = ai && !ai.hasKey();
+  const e = V._aiErr; V._aiErr = null;
+  const why = e && e.error ? ' (' + (AIERR[e.error] || AIERR.http) + (e.detail && e.error === 'http' ? ' ' + e.detail : '') + ')' : '';
+  const hint = noKey ? ' ولو فعّلت المساعد الذكي المجاني هفهم أي صياغة وأبحث وأفتح أي تبويب.' : '';
   if (sg.length) {
-    await reply('مفهمتش الأمر بالظبط. تقصد حاجة زي: ' + sg.map(x => '«' + x + '»').join(' أو ') + '؟' + hint, { cls: 'warn' });
-    askUI(sg.map((x, i) => ({ act: 'sug', i, label: x })));
+    await reply('مفهمتش الأمر بالظبط' + why + '. تقصد حاجة زي: ' + sg.map(x => '«' + x + '»').join(' أو ') + '؟' + hint, { cls: 'warn' });
+    askUI(sg.map((x, i) => ({ act: 'sug', i, label: x })).concat(noKey ? [{ act: 'aisetup', label: T('فعّل المساعد الذكي', 'Enable smart mode'), cls: 'primary' }] : []));
     V._sug = sg; return { ok: false };
   }
-  await reply('مفهمتش الأمر. قول مثلاً: ضيف مهمة، احذف كل المهام المنتهية، اعرض المهام المتأخرة، أو: إيه الأوامر.' + hint, { cls: 'warn' });
+  await reply('مفهمتش الأمر' + why + '. قول مثلاً: ضيف مهمة، احذف كل المهام المنتهية، اعرض المهام المتأخرة، أو: إيه الأوامر.' + hint, { cls: 'warn' });
+  if (noKey) askUI([{ act: 'aisetup', label: T('فعّل المساعد الذكي', 'Enable smart mode'), cls: 'primary' }]);
   return { ok: false };
 };
 
@@ -669,14 +771,24 @@ async function submit(text, via){
   if (V.pending) { await feedPending(text); return; }
   return run(text, via);
 }
+const CONTROL = new Set(['empty', 'yes', 'no', 'stop', 'undo', 'help', 'wake']);
+const LOCAL_OK = new Set(['theme', 'lang', 'read_tasks', 'read_money', 'show_routine', 'add_task', 'add_note', 'complete_task', 'delete_task', 'reschedule', 'add_payment', 'study_done', 'open']);
 function run(text, via){
   const job = chain.then(async () => {
-    setState('thinking'); let r = null, out;
+    setState('thinking'); let r = null, out; const ai = AI(), useAI = !!(ai && ai.enabled() && navigator.onLine !== false);
     try { const sm = SM(); r = sm && sm.pre(text, mctx()); } catch (e) { console.warn('smart.pre', e); r = null; }
     if (!r) r = NLP.parse(text, { now: now(), name: AN() });
-    if (r.intent === 'unknown') { try { const sm = SM(); const p2 = sm && sm.post(text, mctx()); if (p2) r = p2; } catch (e) { console.warn('smart.post', e); } }
-    try { const f = EX[r.intent] || EX.unknown; out = await f(r, text); }
-    catch (e) { console.warn('voice exec', e); await reply('حصلت مشكلة وأنا بنفّذ الأمر. جرب تاني.', { cls: 'err' }); out = { ok: false }; }
+    /* the AI is the main brain: everything except control words and exact, simple local commands goes to it */
+    const wantAI = useAI && !CONTROL.has(r.intent) && (ai.cfg().aiOnly || !(LOCAL_OK.has(r.intent) || (r.intent === 'plan' && !r.ai)));
+    let aiOut = null;
+    if (wantAI) { try { aiOut = await EX.ai(text); } catch (e) { console.warn('ai', e); aiOut = { handled: false, err: { error: 'net' } }; } }
+    if (aiOut && aiOut.handled) { out = aiOut; r = { intent: 'ai' }; }
+    else {
+      if (r.intent === 'unknown') { try { const sm = SM(); const p2 = sm && sm.post(text, mctx()); if (p2) r = p2; } catch (e) { console.warn('smart.post', e); } }
+      if (aiOut && aiOut.err && r.intent !== 'unknown') { const e = aiOut.err; bubble('bot', '(المساعد الذكي مش متاح دلوقتي: ' + (AIERR[e.error] || AIERR.http) + ' نفّذت الأمر بالمحرك المحلي.)', 'warn'); }
+      try { const f = EX[r.intent] || EX.unknown; out = await f(r, text); }
+      catch (e) { console.warn('voice exec', e); await reply('حصلت مشكلة وأنا بنفّذ الأمر. جرب تاني.', { cls: 'err' }); out = { ok: false }; }
+    }
     if (!(out && out.noLog) && r.intent !== 'empty' && r.intent !== 'yes' && r.intent !== 'no' && r.intent !== 'stop') { logEntry(text, r.intent, V.lastSay, !(out && out.ok === false)); try { MSA.save(); } catch (e) {} }
     if (V.open && !V.listening && !V.pending) setState('idle');
     return { intent: r.intent, say: V.lastSay, ok: !(out && out.ok === false), ai: !!(out && out.aiUsed) };
@@ -691,32 +803,74 @@ V.parse = (t) => { try { const p = SM() && SM().pre(t, mctx()); if (p) return p;
 const ago = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? T('الآن', 'now') : m < 60 ? m + T(' د', 'm') : m < 1440 ? Math.round(m / 60) + T(' س', 'h') : Math.round(m / 1440) + T(' يوم', 'd'); };
 
 /* ---------------- optional smart (AI) mode UI ---------------- */
+const AI_ST = { auth: ['المفتاح مرفوض — راجع إنك نسخته كامل.', 'Key rejected — check you copied it fully.'], limit: ['وصلت للحد المجاني دلوقتي. جرّب بعد شوية.', 'Free limit reached. Try again later.'], net: ['مفيش اتصال بالإنترنت.', 'No connection.'], timeout: ['الرد اتأخر.', 'Timed out.'], model: ['النموذج مش متاح.', 'Model unavailable.'], http: ['المزوّد رجّع خطأ.', 'Provider error.'], parse: ['الرد مش مفهوم.', 'Unreadable reply.'] };
+async function aiTest(){
+  const A = window.VoiceAI; const r = await A.ask('قولي مرحبا', { tasks: [], projects: [] }, new Date(), U.toMs, null);
+  if (r.plan) return { ok: true, text: T('تمام، الاتصال شغّال ✓', 'Connected ✓') };
+  const m = AI_ST[r.error] || AI_ST.http; return { ok: false, text: T('فشل: ', 'Failed: ') + T(m[0], m[1]) };
+}
+const keyHint = p => p === 'gemini' ? 'AIza…' : p === 'groq' ? 'gsk_…' : '';
 function aiHTML(){
   const A = window.VoiceAI; if (!A) return '';
   const c = A.cfg(), sel = (v, l) => '<option value="' + v + '"' + (c.provider === v ? ' selected' : '') + '>' + esc(l) + '</option>';
+  const st = A.hasKey() ? (c.off ? T('متوقف مؤقتًا', 'Paused') : T('شغّال — هو المساعد الأساسي ✓', 'On — the main brain ✓')) : T('مش مفعّل — محتاج مفتاح مجاني مرة واحدة', 'Off — needs a free key once');
   return '<div class="vc-ai" id="vcAiBox" style="border:1px solid var(--line,rgba(128,128,128,.25));border-radius:12px;padding:12px;margin:4px 0 14px">' +
-    '<div style="font-weight:700;margin-bottom:4px">' + I('star', 'sm') + ' ' + esc(T('المساعد الذكي (اختياري) — يفهم أي صياغة', 'Smart mode (optional) — understands any wording')) + '</div>' +
-    '<div class="hint" style="margin-bottom:10px;line-height:1.7">' + esc(T('من غيره المساعد بيفهم أوامر كتير محليًا ومجانًا. لو فعّلته، الأوامر اللي مش مفهومة بتتبعت (مع عناوين مهامك وأسماء مشاريعك) لمزوّد الذكاء الاصطناعي اللي تختاره بمفتاحك أنت، وبعدين البرنامج هو اللي ينفّذ مع تأكيد قبل أي حذف وتراجع. المفتاح بيتخزن على الجهاز ده بس ومش بيتزامن ولا بيدخل النسخة الاحتياطية.', 'Without it the assistant understands many commands locally and free. If you enable it, commands it cannot understand are sent (with your task titles and project names) to the AI provider you choose, using YOUR key; the app then executes them with a confirmation before any delete, plus undo. The key is stored on this device only — never synced or backed up.')) + '</div>' +
-    '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="vcAiOn" ' + (c.on ? 'checked' : '') + '><span>' + esc(T('تفعيل المساعد الذكي', 'Enable smart mode')) + '</span></label>' +
-    '<div class="field"><label class="f">' + esc(T('المزوّد', 'Provider')) + '</label><select id="vcAiProv">' + sel('gemini', 'Google Gemini (' + T('فيه خطة مجانية', 'has a free tier') + ')') + sel('anthropic', 'Anthropic Claude') + sel('openai', 'OpenAI') + '</select></div>' +
-    '<div class="field"><label class="f">' + esc(T('مفتاح الـ API', 'API key')) + '</label><input type="password" id="vcAiKey" dir="ltr" autocomplete="off" value="' + esc(c.key) + '" placeholder="' + esc(T('الصق المفتاح هنا', 'Paste your key')) + '"></div>' +
-    '<div class="field"><label class="f">' + esc(T('النموذج (اختياري)', 'Model (optional)')) + '</label><input type="text" id="vcAiModel" dir="ltr" value="' + esc(c.model) + '" placeholder="' + esc(A.MODELS[c.provider]) + '"></div>' +
+    '<div style="font-weight:700;margin-bottom:4px">' + I('star', 'sm') + ' ' + esc(T('المساعد الذكي (الأساسي)', 'Smart assistant (main)')) + ' — <span id="vcAiSt0">' + esc(st) + '</span></div>' +
+    '<div class="hint" style="margin-bottom:10px;line-height:1.7">' + esc(T('بعد ما تضيف المفتاح بيشتغل لوحده طول ما فيه إنترنت: بيفهم أي صياغة، بيبحث جوا البرنامج، بيفتح أي تبويب أو قائمة، وبينفّذ الأوامر. عناوين المهام وأسماء المشاريع بتتبعت للمزوّد مع كل أمر — متحطش بيانات حساسة.', 'Once a key is added it runs by itself whenever you are online: understands any wording, searches inside the app, opens any tab or list and runs commands. Task titles and project names are sent to the provider with each command — avoid sensitive data.')) + '</div>' +
+    '<div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn sm primary" data-vc="aisetup">' + esc(A.hasKey() ? T('تغيير المفتاح / المزوّد', 'Change key / provider') : T('إضافة المفتاح (خطوة بخطوة)', 'Add key (step by step)')) + '</button></div>' +
+    '<div class="field"><label class="f">' + esc(T('المزوّد', 'Provider')) + '</label><select id="vcAiProv">' + sel('gemini', 'Google Gemini (' + T('مجاني', 'free') + ')') + sel('groq', 'Groq (' + T('مجاني', 'free') + ')') + sel('anthropic', 'Anthropic Claude (' + T('مدفوع', 'paid') + ')') + sel('openai', 'OpenAI (' + T('مدفوع', 'paid') + ')') + '</select></div>' +
+    '<div class="field"><label class="f">' + esc(T('مفتاح الـ API', 'API key')) + '</label><input type="password" id="vcAiKey" dir="ltr" autocomplete="off" value="' + esc(c.key) + '" placeholder="' + esc(keyHint(c.provider) || T('الصق المفتاح هنا', 'Paste your key')) + '"><div class="hint">' + esc(T('بيتخزّن على الجهاز ده بس، ومش بيتزامن ولا بيتحط في النسخ الاحتياطي.', 'Stored on this device only — never synced or included in backups.')) + '</div></div>' +
+    '<div class="field"><label class="f">' + esc(T('النموذج (اختياري)', 'Model (optional)')) + '</label><input type="text" id="vcAiModel" dir="ltr" value="' + esc(c.model) + '" placeholder="' + esc(T('تلقائي', 'auto')) + '"></div>' +
+    '<label class="row" style="margin-bottom:8px;cursor:pointer"><input type="checkbox" class="cb" id="vcAiOff" ' + (c.off ? 'checked' : '') + '><span>' + esc(T('إيقاف المساعد الذكي مؤقتًا (يرجع للمحرك المحلي)', 'Pause smart mode (use the local engine)')) + '</span></label>' +
+    '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="vcAiOnly" ' + (c.aiOnly ? 'checked' : '') + '><span>' + esc(T('ابعت كل الأوامر للذكاء الاصطناعي (أدق لكن أبطأ وبيستهلك من الحد المجاني)', 'Send every command to the AI (more accurate, slower, uses free quota)')) + '</span></label>' +
     '<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm" id="vcAiTest">' + esc(T('جرّب الاتصال', 'Test connection')) + '</button><span class="hint" id="vcAiSt"></span></div></div>';
 }
 function wireAI(el){
-  const A = window.VoiceAI; const g = id => $('#' + id, el); if (!A || !g('vcAiOn')) return;
+  const A = window.VoiceAI; const g = id => $('#' + id, el); if (!A || !g('vcAiProv')) return;
   const st = t => { const h = g('vcAiSt'); if (h) h.textContent = t; };
-  g('vcAiOn').onchange = e => { if (e.target.checked && !(A.cfg().key || '').trim()) { st(T('الصق المفتاح الأول.', 'Paste a key first.')); } A.save({ on: e.target.checked }); };
-  g('vcAiProv').onchange = e => { A.save({ provider: e.target.value }); g('vcAiModel').placeholder = A.MODELS[e.target.value]; };
-  g('vcAiKey').onchange = e => A.save({ key: e.target.value.trim() });
+  g('vcAiProv').onchange = e => { A.save({ provider: e.target.value, model: '' }); g('vcAiModel').value = ''; g('vcAiKey').placeholder = keyHint(e.target.value); };
+  g('vcAiKey').onchange = e => { A.save({ key: e.target.value.trim() }); aiBar(); };
   g('vcAiModel').onchange = e => A.save({ model: e.target.value.trim() });
-  g('vcAiTest').onclick = async () => {
-    A.save({ key: g('vcAiKey').value.trim(), model: g('vcAiModel').value.trim(), provider: g('vcAiProv').value }); const was = A.cfg().on; A.save({ on: true });
-    st(T('بجرّب…', 'Testing…'));
-    const r = await A.ask('قولي مرحبا', { tasks: [], projects: [] }, new Date(), U.toMs); A.save({ on: was });
-    st(r.plan ? T('تمام، الاتصال شغّال ✓', 'Connected ✓') : T('فشل: ', 'Failed: ') + ({ auth: T('المفتاح مرفوض', 'key rejected'), limit: T('تجاوزت الحد', 'rate limit'), net: T('مفيش اتصال', 'no connection'), timeout: T('انتهت المهلة', 'timeout'), parse: T('رد غير مفهوم', 'bad reply'), http: T('خطأ من المزوّد', 'provider error') }[r.error] || r.error));
-  };
+  g('vcAiOff').onchange = e => { A.save({ off: e.target.checked }); aiBar(); };
+  g('vcAiOnly').onchange = e => A.save({ aiOnly: e.target.checked });
+  g('vcAiTest').onclick = async () => { A.save({ key: g('vcAiKey').value.trim(), model: g('vcAiModel').value.trim(), provider: g('vcAiProv').value }); if (!A.hasKey()) { st(T('الصق المفتاح الأول.', 'Paste a key first.')); return; } st(T('بجرّب…', 'Testing…')); const r = await aiTest(); st(r.text); aiBar(); };
+  el.addEventListener('click', e => { const b = e.target.closest('[data-vc=aisetup]'); if (b) V.aiSetup(); });
 }
+
+/* ---------------- first-time setup wizard ---------------- */
+V.aiSetup = function(){
+  const A = window.VoiceAI; if (!A) return;
+  let prov = A.cfg().provider === 'groq' ? 'groq' : 'gemini';
+  const P = A.PROVIDERS;
+  const steps = p => p === 'gemini'
+    ? [T('اضغط «افتح صفحة المفتاح» — هتفتح Google AI Studio (سجّل دخول بحساب جوجل).', 'Tap “Open key page” — Google AI Studio opens (sign in with Google).'), T('اضغط Create API key (مش محتاج بطاقة ولا دفع).', 'Tap Create API key (no card or billing needed).'), T('انسخ المفتاح (بيبدأ بـ AIza) وارجع هنا.', 'Copy the key (starts with AIza) and come back.'), T('الصقه تحت واضغط «حفظ وتجربة».', 'Paste it below and tap “Save & test”.')]
+    : [T('اضغط «افتح صفحة المفتاح» — هتفتح Groq Console (سجّل بحساب جوجل أو إيميل).', 'Tap “Open key page” — Groq Console opens (sign in).'), T('اضغط Create API Key وسمّيه أي اسم.', 'Tap Create API Key and name it.'), T('انسخ المفتاح (بيبدأ بـ gsk_) وارجع هنا.', 'Copy the key (starts with gsk_) and come back.'), T('الصقه تحت واضغط «حفظ وتجربة».', 'Paste it below and tap “Save & test”.')];
+  const body = () => '<div class="field"><label class="f">' + esc(T('اختار المزوّد المجاني', 'Pick a free provider')) + '</label><div class="seg" id="aiwProv">' +
+    '<button data-p="gemini" class="' + (prov === 'gemini' ? 'on' : '') + '">Google Gemini ' + esc(T('(الأفضل)', '(best)')) + '</button><button data-p="groq" class="' + (prov === 'groq' ? 'on' : '') + '">Groq</button></div></div>' +
+    '<ol style="padding-inline-start:20px;line-height:1.9;margin:8px 0">' + steps(prov).map(x => '<li>' + esc(x) + '</li>').join('') + '</ol>' +
+    '<div class="row" style="margin-bottom:10px"><button class="btn sm" id="aiwOpen">' + esc(T('افتح صفحة المفتاح', 'Open key page')) + '</button></div>' +
+    '<div class="field"><label class="f">' + esc(T('مفتاح الـ API', 'API key')) + '</label><input type="password" id="aiwKey" dir="ltr" autocomplete="off" placeholder="' + esc(keyHint(prov)) + '"></div>' +
+    '<div class="hint" style="line-height:1.7">' + esc(T('الحد المجاني كفاية للاستخدام الشخصي، بس بيختلف وممكن يتغيّر. المفتاح بيتحفظ على الجهاز ده بس. المزوّد بيستقبل عناوين المهام وأسماء المشاريع مع كل أمر، وفي الخطة المجانية جوجل ممكن تستخدم البيانات لتحسين منتجاتها (خارج أوروبا/بريطانيا) — متكتبش بيانات حساسة.', 'The free limit is enough for personal use but varies and may change. The key stays on this device. The provider receives task titles and project names with each command; on Google’s free tier data may be used to improve products (outside EEA/UK) — avoid sensitive data.')) + '</div>' +
+    '<div class="hint" id="aiwSt" style="margin-top:8px;font-weight:600"></div>';
+  const m = MSA.modal({ title: T('تفعيل المساعد الذكي (مجاني)', 'Enable the smart assistant (free)'), body: body(), buttons: [
+    { label: T('إلغاء', 'Cancel'), cls: 'ghost', onClick: api => api.close() },
+    { label: T('حفظ وتجربة', 'Save & test'), cls: 'primary', onClick: async (api, wrap) => {
+      const k = ($('#aiwKey', wrap).value || '').trim(), st = $('#aiwSt', wrap);
+      if (k.length < 10) { st.textContent = T('الصق المفتاح الأول.', 'Paste the key first.'); return; }
+      A.save({ provider: prov, key: k, model: '', off: false }); st.textContent = T('بجرّب…', 'Testing…');
+      const r = await aiTest(); st.textContent = r.text;
+      if (r.ok) { aiBar(); try { MSA.toast(T('المساعد الذكي اتفعّل ✓', 'Smart assistant enabled ✓')); } catch (e) {} setTimeout(() => api.close(), 700); if (V.open) bubble('bot', 'المساعد الذكي اتفعّل ✓ دلوقتي أفهم أي صياغة وأقدر أبحث وأفتح أي تبويب.'); }
+      else A.save({ key: '' }), aiBar();
+    } }
+  ], onMount: (wrap) => {
+    const bind = () => {
+      $('#aiwProv', wrap).onclick = e => { const b = e.target.closest('button[data-p]'); if (!b) return; prov = b.dataset.p; const k = $('#aiwKey', wrap).value; $('.mb', wrap).innerHTML = body(); $('#aiwKey', wrap).value = k; bind(); };
+      $('#aiwOpen', wrap).onclick = () => MSA.openLink(P[prov].keyUrl);
+    };
+    bind();
+  } });
+  return m;
+};
 MSA.voiceHTML = () => {
   const c = cfg(), d = dev(), eng = engineName(), L = S().voiceLog || [];
   const chk = (id, on, label) => '<label class="row" style="margin-bottom:10px;cursor:pointer"><input type="checkbox" class="cb" id="' + id + '" ' + (on ? 'checked' : '') + '><span>' + esc(label) + '</span></label>';
