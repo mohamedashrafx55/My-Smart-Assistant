@@ -18,7 +18,7 @@ Q.add = function(o){
 Q.open = function(){
   if (openNow || document.getElementById('lock')) return; openNow = true;
   let date = '', time = '', manual = false, high = false, goFn = null;
-  const NLP = window.VoiceNLP;
+  const NLP = window.TextNLP;
   const m = MSA.modal({
     title: T('مهمة سريعة', 'Quick task'), size: 'sm',
     body: '<div class="field"><input id="qkT" dir="auto" autocomplete="off" placeholder="' + esc(T('اكتب المهمة… مثال: اتصل بالعميل بكرة الساعة 3', 'Type a task… e.g. call the client tomorrow at 3')) + '" style="font-size:17px"></div>' +

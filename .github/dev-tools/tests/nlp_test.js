@@ -1,4 +1,4 @@
-const N=require('../../../js/voice-nlp.js');
+const N=require('../../../js/nlp.js');
 const now=new Date(2026,10,15,11,0);   // Sunday 15 Nov 2026 11:00
 let pass=0,fail=0;
 function t(text,exp,ctx){ const r=N.parse(text,Object.assign({now},ctx||{})); const bad=Object.keys(exp).filter(k=>JSON.stringify(r[k])!==JSON.stringify(exp[k])); if(bad.length){fail++;console.log('FAIL',JSON.stringify(text),'\n   got',JSON.stringify(r),'\n   exp',JSON.stringify(exp));} else pass++; }

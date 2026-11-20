@@ -74,6 +74,8 @@ function load(){
   return defaults();
 }
 MSA.state = load();
+/* the voice / smart assistant was removed: drop its leftover data and device keys */
+try { delete MSA.state.voiceLog; if (MSA.state.settings) delete MSA.state.settings.voice; ['msa_voice_dev', 'msa_voice_ai_v1', 'msa_voice_ai', 'msa_voice_ai_model'].forEach(k => localStorage.removeItem(k)); Object.keys(localStorage).filter(k => /^msa_voice/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (e) {}
 let frozen = false; /* set while a backup is being restored / data wiped, so the page-unload save cannot overwrite it */
 const persist = () => { if (frozen) return; try { localStorage.setItem(KEY, JSON.stringify(MSA.state)); } catch (e) { if (e && (e.name === 'QuotaExceededError' || e.code === 22) && MSA.toast) MSA.toast('Storage is full — export a backup', 'err'); } };
 const saveDeb = U.debounce(persist, 250);

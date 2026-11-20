@@ -100,10 +100,6 @@ async def main():
         ok('drag a card onto a folder moves it', await pg.evaluate("""(()=>{const c=document.querySelector('.fm-card:not(.dir)'),f=document.querySelector('.fm-card.dir');const dt=new DataTransfer();dt.setData('text/msa-fm',JSON.stringify([c.dataset.id]));
           c.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:dt}));f.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:dt}));
           return MSA.state.vault.items.find(x=>x.id===c.dataset.id).parent===f.dataset.id})()"""))
-        # voice nav
-        await pg.evaluate("MSA.go('home');MSA.state.settings.voice=Object.assign(MSA.state.settings.voice||{},{on:true,tts:false,confirm:true});MSA.voice.refresh();MSA.voice._listen=async()=>''")
-        await pg.evaluate("MSA.voice.run('افتح ملفاتي')"); await pg.wait_for_timeout(400)
-        ok('voice: "افتح ملفاتي" opens the files view', await pg.evaluate("MSA.view==='files'"))
         # mobile + english
         pm = await e.page(w=390, h=800)
         await pm.evaluate("MSA.vault.newFolder('A');MSA.vault.newFolder('B');MSA.go('files')"); await pm.wait_for_timeout(300)

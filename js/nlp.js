@@ -1,7 +1,7 @@
-/* Voice assistant — command understanding (pure functions, no DOM, no state).
-   Rule based Arabic (Egyptian dialect + Modern Standard) command parser. Free, offline, unlimited.
+/* Arabic text understanding (pure functions, no DOM, no state). Used by the Quick task box to read dates/times from typed text.
+   Rule based Arabic (Egyptian dialect + Modern Standard) parser. Free, offline, unlimited.
    parse(text, {now:Date, name:'اسم المساعد'}) -> { intent, ... }  ·  best(items, query, getText) -> fuzzy matches.
-   Works in the browser (window.VoiceNLP) and in Node (module.exports) so it can be unit-tested. */
+   Works in the browser (window.TextNLP) and in Node (module.exports) so it can be unit-tested. */
 (function(root){
 'use strict';
 
@@ -308,5 +308,5 @@ const COMMANDS = [
 ];
 
 const api = { parse, when, best, clean, norm1, sayTime, sayDate, key, addDays, NAME_AR, COMMANDS, toks };
-root.VoiceNLP = api; if (typeof module !== 'undefined' && module.exports) module.exports = api;
+root.TextNLP = api; if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
