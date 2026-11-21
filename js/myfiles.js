@@ -135,26 +135,169 @@ async function del(ids){
   if (!await MSA.confirm(msg, { danger: true })) return false;
   await F.remove(ids); ids.forEach(id => sel.delete(id)); return true;
 }
-function itemMenu(x){
-  const isD = x.t === 'd';
-  const m = MSA.modal({ title: x.name, size: 'sm', footer: false,
-    body: '<div class="fm-menu">' + (isD ? '<button data-m="open">' + I('folder-open', 'sm') + esc(T('فتح', 'Open')) + '</button>' : '<button data-m="open">' + I('eye', 'sm') + esc(T('معاينة', 'Preview')) + '</button><button data-m="dl">' + I('download', 'sm') + esc(T('تنزيل', 'Download')) + '</button>') +
-      '<button data-m="fav">' + I('star', 'sm') + esc(x.fav ? T('إزالة من المفضلة', 'Remove from favourites') : T('إضافة للمفضلة', 'Add to favourites')) + '</button><button data-m="ren">' + I('pencil', 'sm') + esc(isD ? T('تعديل الاسم واللون', 'Rename & colour') : T('إعادة تسمية', 'Rename')) + '</button><button data-m="mv">' + I('folder', 'sm') + esc(T('نقل إلى…', 'Move to…')) + '</button><button data-m="del" class="danger">' + I('trash', 'sm') + esc(T('حذف', 'Delete')) + '</button></div>' });
-  m.el.addEventListener('click', async e => {
-    const b = e.target.closest('[data-m]'); if (!b) return; const a = b.dataset.m; m.close();
-    if (a === 'open') openItem(x); else if (a === 'dl') MSA.downloadAtt(x.a);
-    else if (a === 'fav') { x.fav = !x.fav; redo(); }
-    else if (a === 'ren') { if (isD) folderDialog(x, x.parent, () => MSA.rerender(true)); else { const n = await askName(T('الاسم الجديد', 'New name'), x.name); if (n) { F.rename(x.id, n); MSA.rerender(true); } } }
-    else if (a === 'mv') pickFolder(T('نقل «' + x.name + '» إلى', 'Move “' + x.name + '” to'), [x.id], x.parent || null, p => { F.move([x.id], p); MSA.rerender(true); });
-    else if (a === 'del') { if (await del([x.id])) MSA.rerender(true); }
+/* ---------- right-click menu (like Drive / Explorer) ---------- */
+let clip = null; /* {ids, mode:'copy'|'cut'} */
+const isText = x => x.t === 'f' && x.a && (/^text\//.test(x.a.mime || '') || /^(txt|md|csv|json|log|srt|vtt|xml|html?|css|js)$/i.test(ext(x.name)));
+const isPdf = x => x.t === 'f' && x.a && (x.a.mime === 'application/pdf' || ext(x.name) === 'PDF');
+const printable = x => x.t === 'f' && x.a && (x.a.kind === 'image' || isPdf(x) || isText(x));
+const uniqueName = (n, parent) => { const sib = new Set(kids(parent).map(k => k.name)); if (!sib.has(n)) return n; const m = /^(.*?)(\.[A-Za-z0-9]{1,5})?$/.exec(n), base = m[1], ex = m[2] || ''; for (let i = 1; i < 1000; i++) { const c = base + ' (' + (i === 1 ? T('نسخة', 'copy') : T('نسخة ', 'copy ') + i) + ')' + ex; if (!sib.has(c)) return c; } return n + Date.now(); };
+async function cloneItem(x, parent){
+  const c = { id: U.uid('vf'), t: x.t, name: uniqueName(x.name, parent), parent: parent || null, fav: false, created: Date.now(), updated: Date.now() };
+  if (x.t === 'd') { c.color = x.color; items().push(c); for (const k of kids(x.id).slice()) await cloneItem(k, c.id); return c; }
+  const rec = await MSA.files.get(x.a.id); if (!rec) return null;
+  c.a = await MSA.files.put(new File([rec.blob], c.name, { type: rec.mime || x.a.mime || '' })); items().push(c); return c;
+}
+async function pasteInto(parent){
+  if (!clip || !clip.ids.length) return 0;
+  const ids = clip.ids.filter(id => byId(id)); let n = 0;
+  if (clip.mode === 'cut') { n = F.move(ids, parent); clip = null; }
+  else { for (const id of ids) { const c = await cloneItem(byId(id), parent); if (c) n++; } MSA.save(); }
+  return n;
+}
+function propsDialog(x){
+  const isD = x.t === 'd', all = isD ? subtree(x.id).filter(y => y.id !== x.id) : [], files = all.filter(y => y.t === 'f'), bytes = files.reduce((a, y) => a + ((y.a && y.a.size) || 0), 0);
+  const path = ['ملفاتي'].concat(crumbs(x.parent).map(c => c.name)).join(' / ');
+  const row = (k, v) => '<div class="row" style="justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--line,rgba(128,128,128,.2))"><span class="muted">' + esc(k) + '</span><b dir="auto" style="text-align:end;word-break:break-all">' + esc(v) + '</b></div>';
+  MSA.modal({ title: T('خصائص', 'Properties'), size: 'sm', buttons: [{ label: T('إغلاق', 'Close'), cls: 'primary', onClick: a => a.close() }],
+    body: row(T('الاسم', 'Name'), x.name) + row(T('النوع', 'Type'), isD ? T('مجلد', 'Folder') : (ext(x.name) || (x.a && x.a.kind) || T('ملف', 'File'))) + row(T('المكان', 'Location'), path) +
+      row(T('الحجم', 'Size'), U.size(isD ? bytes : ((x.a && x.a.size) || 0))) + (isD ? row(T('المحتوى', 'Contents'), T(files.length + ' ملف و ' + (all.length - files.length) + ' مجلد', files.length + ' file(s), ' + (all.length - files.length) + ' folder(s)')) : '') +
+      row(T('تاريخ الإضافة', 'Created'), when(x.created)) + row(T('آخر تعديل', 'Modified'), when(x.updated)) });
+}
+async function printItems(list){
+  const ps = list.filter(printable);
+  if (!ps.length) { MSA.toast(T('الطباعة متاحة للصور وملفات PDF والنصوص. نزّل الملف وافتحه ببرنامجه للأنواع التانية.', 'Printing works for images, PDFs and text. Download other types and open them in their own app.'), 'err', 3500); return; }
+  const pdf = ps.find(isPdf);
+  const frame = document.createElement('iframe'); frame.style.cssText = 'position:fixed;inset-inline-end:0;bottom:0;width:0;height:0;border:0;opacity:0'; document.body.appendChild(frame);
+  const cleanup = () => setTimeout(() => frame.remove(), 60000);
+  try {
+    if (pdf) { const u = await MSA.files.url(pdf.a.id); frame.onload = () => { try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (e) { MSA.toast(T('تعذّرت الطباعة من هنا — نزّل الملف واطبعه.', 'Could not print here — download the file and print it.'), 'err'); } }; frame.src = u; cleanup(); return; }
+    let body = '';
+    for (const x of ps) {
+      if (x.a.kind === 'image') body += '<img src="' + await MSA.files.url(x.a.id) + '" style="max-width:100%;max-height:96vh;display:block;margin:0 auto;page-break-after:always">';
+      else { const rec = await MSA.files.get(x.a.id); body += '<h4 style="font:600 14px sans-serif">' + esc(x.name) + '</h4><pre dir="auto" style="white-space:pre-wrap;font:13px/1.6 monospace;page-break-after:always">' + esc(await rec.blob.text()) + '</pre>'; }
+    }
+    frame.srcdoc = '<!doctype html><meta charset="utf-8"><title>' + esc(ps.length === 1 ? ps[0].name : 'My files') + '</title><body style="margin:0">' + body + '</body>';
+    frame.onload = () => { const w = frame.contentWindow, imgs = Array.from(w.document.images), go = () => { try { w.focus(); w.print(); } catch (e) { MSA.toast(T('تعذّرت الطباعة من هنا.', 'Could not print here.'), 'err'); } }; Promise.all(imgs.map(i => i.complete ? 1 : new Promise(r => { i.onload = i.onerror = r; }))).then(go); };
+    cleanup();
+  } catch (e) { frame.remove(); MSA.toast(T('تعذّرت الطباعة.', 'Print failed.'), 'err'); }
+  if (ps.length < list.length) MSA.toast(T('اتطبع المتاح بس (صور/PDF/نص).', 'Only printable files were sent (images/PDF/text).'), 'ok');
+}
+async function editText(x){
+  const rec = await MSA.files.get(x.a.id); const txt = rec ? await rec.blob.text() : '';
+  MSA.modal({ title: x.name, size: 'wide', body: '<textarea id="fmTx" dir="auto" rows="16" style="width:100%;font:14px/1.6 monospace;resize:vertical"></textarea>',
+    buttons: [{ label: T('إلغاء', 'Cancel'), cls: 'ghost', onClick: a => a.close() }, { label: T('حفظ', 'Save'), cls: 'primary', onClick: async a => {
+      const v = $('#fmTx', a.el).value, old = x.a.id; const na = await MSA.files.put(new File([v], x.name, { type: x.a.mime || 'text/plain' }));
+      x.a = na; x.updated = Date.now(); try { await MSA.files.del(old); } catch (e) {} MSA.save(); a.close(); MSA.toast(T('اتحفظ', 'Saved'), 'ok'); MSA.rerender(true);
+    } }], onMount: el => { const t = $('#fmTx', el); t.value = txt; setTimeout(() => t.focus(), 60); } });
+}
+async function newTextFile(parent){
+  const n = await askName(T('اسم الملف النصي', 'Text file name'), T('ملف جديد.txt', 'New file.txt')); if (!n) return;
+  const name = uniqueName(/\.[A-Za-z0-9]{1,5}$/.test(n) ? n : n + '.txt', parent);
+  const out = await F.addFiles([new File([''], name, { type: 'text/plain' })], parent); MSA.rerender(true); if (out[0]) editText(out[0]);
+}
+const targets = x => (sel.has(x.id) && sel.size > 1) ? [...sel].map(byId).filter(Boolean) : [x];
+function entriesFor(x){
+  const ts = x ? targets(x) : [], one = ts.length === 1, isD = x && x.t === 'd', u = ui();
+  const E = (id, label, icon, o) => Object.assign({ id, label, icon }, o || {});
+  if (x) {
+    const files = ts.filter(y => y.t === 'f');
+    const L = [];
+    if (one) L.push(E('open', isD ? T('فتح', 'Open') : T('معاينة', 'Preview'), isD ? 'folder-open' : 'eye', { key: 'Enter' }));
+    if (one && isText(x)) L.push(E('edit', T('تحرير النص', 'Edit text'), 'pencil'));
+    L.push('-');
+    if (files.length || ts.some(y => y.t === 'd')) L.push(E('dl', T('تنزيل', 'Download'), 'download'));
+    if (ts.some(printable)) L.push(E('print', T('طباعة', 'Print'), 'printer', { key: 'Ctrl+P' }));
+    if (files.length && navigator.canShare) L.push(E('share', T('مشاركة', 'Share'), 'share'));
+    L.push('-', E('cut', T('قص', 'Cut'), 'scissors', { key: 'Ctrl+X' }), E('copy', T('نسخ', 'Copy'), 'copy', { key: 'Ctrl+C' }));
+    if (one && isD && clip) L.push(E('pasteIn', T('لصق داخل المجلد', 'Paste into folder'), 'paste', { key: 'Ctrl+V' }));
+    L.push(E('dup', T('تكرار', 'Duplicate'), 'layers'), E('mv', T('نقل إلى…', 'Move to…'), 'folder'));
+    if (one) L.push(E('ren', isD ? T('تعديل الاسم واللون', 'Rename & colour') : T('إعادة تسمية', 'Rename'), 'pencil', { key: 'F2' }));
+    L.push(E('fav', ts.every(y => y.fav) ? T('إزالة من المفضلة', 'Remove from favourites') : T('إضافة للمفضلة', 'Add to favourites'), 'star'));
+    if (!sel.has(x.id)) L.push(E('select', T('تحديد', 'Select'), 'check'));
+    if (one) L.push(E('props', T('خصائص', 'Properties'), 'info', { key: 'Alt+Enter' }));
+    L.push('-', E('del', ts.length > 1 ? T('حذف ' + ts.length + ' عنصر', 'Delete ' + ts.length + ' items') : T('حذف', 'Delete'), 'trash', { danger: true, key: 'Del' }));
+    return L;
+  }
+  const L = [E('newf', T('مجلد جديد', 'New folder'), 'folder-plus'), E('newt', T('ملف نصي جديد', 'New text file'), 'file-plus'), E('up', T('رفع ملفات', 'Upload files'), 'upload'), '-'];
+  L.push(E('paste', T('لصق', 'Paste'), 'paste', { key: 'Ctrl+V', disabled: !clip }), E('all', T('تحديد الكل', 'Select all'), 'checks', { key: 'Ctrl+A' }), '-');
+  const srt = [['name', T('الاسم', 'Name')], ['date', T('التاريخ', 'Date')], ['size', T('الحجم', 'Size')], ['type', T('النوع', 'Type')]];
+  L.push(E('sort', T('ترتيب حسب', 'Sort by'), 'list', { sub: srt.map(s => E('sort:' + s[0], s[1], u.sort === s[0] ? 'check' : '')) }),
+    E('view', u.view === 'list' ? T('عرض شبكة', 'Grid view') : T('عرض قائمة', 'List view'), u.view === 'list' ? 'grid' : 'list'), E('refresh', T('تحديث', 'Refresh'), 'refresh', { key: 'F5' }));
+  return L;
+}
+let ctxEl = null;
+function closeCtx(){ if (ctxEl) { ctxEl.remove(); ctxEl = null; document.removeEventListener('mousedown', ctxOut, true); document.removeEventListener('keydown', ctxKey, true); window.removeEventListener('resize', closeCtx); window.removeEventListener('blur', closeCtx); } }
+const ctxOut = e => { if (ctxEl && !ctxEl.contains(e.target)) closeCtx(); };
+const ctxKey = e => {
+  if (!ctxEl) return; const bs = [...ctxEl.querySelectorAll('button:not(:disabled)')], i = bs.indexOf(document.activeElement);
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeCtx(); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); (bs[(i + 1) % bs.length] || bs[0]).focus(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); (bs[(i - 1 + bs.length) % bs.length] || bs[0]).focus(); }
+};
+function showCtx(pt, entries, run, title){
+  closeCtx();
+  const el = ctxEl = document.createElement('div'); el.className = 'fm-ctx'; el.setAttribute('role', 'menu'); el.dir = document.documentElement.dir || 'rtl';
+  const draw = (list, back) => {
+    el.innerHTML = (back ? '<button class="fm-ci" data-back="1">' + I('chev-r', 'sm flip') + '<span>' + esc(T('رجوع', 'Back')) + '</span></button><hr>' : '') +
+      list.map(en => en === '-' ? '<hr>' : '<button class="fm-ci' + (en.danger ? ' danger' : '') + '" role="menuitem" data-m="' + en.id + '"' + (en.disabled ? ' disabled' : '') + '>' + (en.dot ? '<i class="fm-dot' + (en.icon === 'check' ? ' on' : '') + '" style="background:' + esc(en.dot) + '"></i>' : en.icon ? I(en.icon, 'sm') : '<span class="fm-ico0"></span>') + '<span>' + esc(en.label) + '</span>' + (en.sub ? I('chev-l', 'sm flip fm-sub') : en.key ? '<kbd>' + esc(en.key) + '</kbd>' : '') + '</button>').join('');
+    el._list = list;
+  };
+  draw(entries);
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || b.disabled) return;
+    if (b.dataset.back) { draw(entries); return; }
+    const en = el._list.find(z => z !== '-' && z.id === b.dataset.m); if (!en) return;
+    if (en.sub) { draw(en.sub, true); return; }
+    closeCtx(); run(en.id);
   });
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  document.body.appendChild(el);
+  const w = el.offsetWidth, h = el.offsetHeight, vw = innerWidth, vh = innerHeight;
+  let x = pt.x, y = pt.y; if (x + w > vw - 6) x = Math.max(6, x - w); if (y + h > vh - 6) y = Math.max(6, vh - h - 6); if (x < 6) x = 6;
+  el.style.left = x + 'px'; el.style.top = y + 'px';
+  setTimeout(() => { document.addEventListener('mousedown', ctxOut, true); document.addEventListener('keydown', ctxKey, true); window.addEventListener('resize', closeCtx); window.addEventListener('blur', closeCtx); }, 0);
+  const f = el.querySelector('button:not(:disabled)'); f && f.focus({ preventScroll: true });
+  return el;
+}
+async function runAct(a, x, host){
+  const u = ui(), ts = x ? targets(x) : [], one = ts.length === 1, re = () => MSA.rerender(true);
+  if (a.startsWith('sort:')) { u.sort = a.slice(5); redo(); return; }
+  if (a === 'open') openItem(x);
+  else if (a === 'edit') editText(x);
+  else if (a === 'dl') download(ts.map(y => y.id));
+  else if (a === 'print') printItems(ts.flatMap(y => y.t === 'd' ? subtree(y.id).filter(z => z.t === 'f') : [y]));
+  else if (a === 'share') { try { const fs = []; for (const y of ts.filter(z => z.t === 'f')) { const r = await MSA.files.get(y.a.id); if (r) fs.push(new File([r.blob], y.name, { type: r.mime || '' })); } if (navigator.canShare({ files: fs })) await navigator.share({ files: fs }); else MSA.toast(T('المشاركة مش متاحة هنا.', 'Sharing is not available here.'), 'err'); } catch (e) { if (e && e.name !== 'AbortError') MSA.toast(T('تعذّرت المشاركة.', 'Could not share.'), 'err'); } }
+  else if (a === 'cut' || a === 'copy') { clip = { ids: ts.map(y => y.id), mode: a }; MSA.toast(T((a === 'cut' ? 'اتقص ' : 'اتنسخ ') + ts.length + ' عنصر — الصق في أي مجلد', (a === 'cut' ? 'Cut ' : 'Copied ') + ts.length + ' item(s) — paste into any folder'), 'ok', 1800); }
+  else if (a === 'paste' || a === 'pasteIn') { const n = await pasteInto(a === 'pasteIn' ? x.id : u.cur); if (n) { MSA.toast(T('اتلصق ' + n + ' عنصر', n + ' pasted'), 'ok'); re(); } }
+  else if (a === 'dup') { let n = 0; for (const y of ts) { const c = await cloneItem(y, y.parent); if (c) n++; } MSA.save(); sel.clear(); MSA.toast(T('اتعمل ' + n + ' نسخة', n + ' duplicated'), 'ok'); re(); }
+  else if (a === 'mv') pickFolder(one ? T('نقل «' + x.name + '» إلى', 'Move “' + x.name + '” to') : T('نقل ' + ts.length + ' عنصر إلى', 'Move ' + ts.length + ' item(s) to'), ts.filter(y => y.t === 'd').map(y => y.id), one ? (x.parent || null) : undefined, p => { const n = F.move(ts.map(y => y.id), p); sel.clear(); MSA.toast(T('اتنقل ' + n + ' عنصر', n + ' moved'), 'ok'); re(); });
+  else if (a === 'ren') { if (x.t === 'd') folderDialog(x, x.parent, re); else { const n = await askName(T('الاسم الجديد', 'New name'), x.name); if (n) { F.rename(x.id, n); re(); } } }
+  else if (a === 'fav') { const on = !ts.every(y => y.fav); ts.forEach(y => { y.fav = on; }); redo(); }
+  else if (a === 'select') { sel.add(x.id); render(host); }
+  else if (a === 'props') propsDialog(x);
+  else if (a === 'del') { if (await del(ts.map(y => y.id))) re(); }
+  else if (a === 'newf') folderDialog(null, u.cur, re);
+  else if (a === 'newt') newTextFile(u.cur);
+  else if (a === 'up') upload(await MSA.pickFiles('', true));
+  else if (a === 'all') { shown().forEach(y => sel.add(y.id)); render(host); }
+  else if (a === 'view') { u.view = u.view === 'list' ? 'grid' : 'list'; redo(); }
+  else if (a === 'refresh') re();
+}
+F.ctx = { entries: entriesFor, clip: () => clip, run: runAct };
+MSA.menu = { show: showCtx, close: closeCtx };
+function itemMenu(x, pt, host){
+  host = host || document.getElementById('fmGrid') && document.getElementById('fmGrid').closest('.fm') && document.getElementById('fmGrid').parentNode;
+  if (!pt) { const c = document.querySelector('.fm-card[data-id="' + x.id + '"]'), r = c ? c.getBoundingClientRect() : { left: innerWidth / 2 - 100, top: innerHeight / 3, width: 0 }; pt = { x: r.left + Math.min(r.width, 40), y: r.top + 24 }; }
+  showCtx(pt, entriesFor(x), a => runAct(a, x, host));
 }
 function openItem(x){
   if (x.t === 'd') { const u = ui(); u.cur = x.id; u.q = ''; u.f = ''; sel.clear(); redo(); return; }
   const files = shown().filter(y => y.t === 'f').map(y => y.a); MSA.openAtt(x.a, files);
 }
+let curHost = null;
+document.addEventListener('keydown', e => { if (!(e.target.closest && e.target.closest('input,select,textarea,button,[contenteditable=true]')) && curHost && MSA.view === 'files' && curHost.isConnected && !document.querySelector('.overlay,.fm-ctx') && curHost.onkeydown) curHost.onkeydown(e); });
 function wire(host, list){
-  const u = ui(), grid = $('#fmGrid', host);
+  curHost = host; const u = ui(), grid = $('#fmGrid', host);
   const q = $('#fmQ', host); q.oninput = e => { u.q = e.target.value; const pos = e.target.selectionStart; render(host); const i = $('#fmQ', host); i.focus(); try { i.setSelectionRange(pos, pos); } catch (x) {} };
   $('#fmSort', host).onchange = e => { u.sort = e.target.value; redo(); };
   $('#fmView', host).onclick = e => { const b = e.target.closest('[data-v]'); if (b) { u.view = b.dataset.v; redo(); } };
@@ -168,15 +311,35 @@ function wire(host, list){
     else if (a === 'f') { u.f = b.dataset.v; sel.clear(); redo(); }
     else if (a === 'chk' && x) { sel.has(x.id) ? sel.delete(x.id) : sel.add(x.id); render(host); }
     else if (a === 'fav' && x) { x.fav = !x.fav; x.updated = x.updated; redo(); }
-    else if (a === 'more' && x) itemMenu(x);
+    else if (a === 'more' && x) { const r = b.getBoundingClientRect(); itemMenu(x, { x: r.left, y: r.bottom }, host); }
     else if (a === 'bclr') { sel.clear(); render(host); }
     else if (a === 'bfav') { const all = [...sel].map(byId).filter(Boolean), on = !all.every(y => y.fav); all.forEach(y => { y.fav = on; }); redo(); }
     else if (a === 'bdl') download([...sel]);
     else if (a === 'bmove') pickFolder(T('نقل ' + sel.size + ' عنصر إلى', 'Move ' + sel.size + ' item(s) to'), [...sel].filter(id => (byId(id) || {}).t === 'd'), undefined, p => { const n = F.move([...sel], p); sel.clear(); MSA.toast(T('اتنقل ' + n + ' عنصر', n + ' moved'), 'ok'); MSA.rerender(true); });
     else if (a === 'bdel') { if (await del([...sel])) MSA.rerender(true); }
   };
-  host.oncontextmenu = e => { const c = e.target.closest('.fm-card'); if (c) { e.preventDefault(); const x = byId(c.dataset.id); x && itemMenu(x); } };
-  host.onkeydown = e => { const c = e.target.closest && e.target.closest('.fm-card'); if (!c) return; const x = byId(c.dataset.id); if (!x) return; if (e.key === 'Enter') openItem(x); else if (e.key === 'Delete') del([x.id]).then(ok => ok && MSA.rerender(true)); else if (e.key === 'F2') itemMenu(x); };
+  host.oncontextmenu = e => {
+    if (e.target.closest('input,select,textarea')) return;
+    e.preventDefault(); const c = e.target.closest('.fm-card'), pt = { x: e.clientX, y: e.clientY };
+    if (c) { const x = byId(c.dataset.id); if (!x) return; if (!sel.has(x.id) && sel.size) { sel.clear(); render(host); } showCtx(pt, entriesFor(x), a => runAct(a, x, host)); }
+    else showCtx(pt, entriesFor(null), a => runAct(a, null, host));
+  };
+  host.onkeydown = e => {
+    if (e.target.closest && e.target.closest('input,select,textarea')) return;
+    const c = e.target.closest && e.target.closest('.fm-card'), x = c && byId(c.dataset.id), mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (mod && k === 'a') { e.preventDefault(); runAct('all', null, host); return; }
+    if (mod && k === 'v') { if (clip) { e.preventDefault(); runAct(x && x.t === 'd' && !sel.size ? 'pasteIn' : 'paste', x, host); } return; }
+    if (mod && (k === 'c' || k === 'x') && (x || sel.size)) { e.preventDefault(); const t = x || byId([...sel][0]); runAct(k === 'c' ? 'copy' : 'cut', t, host); return; }
+    if (mod && k === 'p' && (x || sel.size)) { e.preventDefault(); runAct('print', x || byId([...sel][0]), host); return; }
+    if (e.key === 'F5') { e.preventDefault(); MSA.rerender(true); return; }
+    if (e.key === 'Escape' && sel.size) { sel.clear(); render(host); return; }
+    if (!x) return;
+    if (e.key === 'Enter' && e.altKey) { e.preventDefault(); propsDialog(x); }
+    else if (e.key === 'Enter') openItem(x);
+    else if (e.key === 'Delete') runAct('del', x, host);
+    else if (e.key === 'F2') { e.preventDefault(); runAct('ren', x, host); }
+    else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); const r = c.getBoundingClientRect(); itemMenu(x, { x: r.left + 20, y: r.top + 20 }, host); }
+  };
   /* drag & drop: files from the computer upload; cards drag into folders / breadcrumbs */
   const drop = $('#fmDrop', host); let dc = 0;
   const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');

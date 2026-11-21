@@ -67,10 +67,14 @@ function render(host){
   html += view === 'list' ? listHTML() : view === 'board' ? boardHTML() : view === 'cal' ? calHTML() : notesHTML();
   host.innerHTML = html;
   bind(host);
+  wireMulti(host);
 }
 
+const isTcol = x => x.type === 'task' && /^#[0-9a-f]{6}$/i.test(x.color || '');
+const tcls = x => isTcol(x) ? ' tc' : '';
+const tsty = x => isTcol(x) ? 'style="--tcol:' + x.color + '"' : '';
 function row(x){
-  return '<div class="trow ' + (isDone(x) ? 'done' : '') + '" data-id="' + x.id + '" data-act="edit"><input type="checkbox" class="cb" data-act="done" ' + (isDone(x) ? 'checked' : '') + ' aria-label="' + U.esc(t('markDone')) + '">' +
+  return '<div class="trow ' + (isDone(x) ? 'done' : '') + tcls(x) + '" ' + tsty(x) + ' data-id="' + x.id + '" data-act="edit"><input type="checkbox" class="cb" data-act="done" ' + (isDone(x) ? 'checked' : '') + ' aria-label="' + U.esc(t('markDone')) + '">' +
     '<div class="grow"><div class="tt">' + U.esc(x.title) + '</div>' + metaRow(x) + '</div><span class="st st-' + x.status + '">' + U.esc(t('status.' + x.status)) + '</span></div>';
 }
 function listHTML(){
@@ -96,7 +100,7 @@ function boardHTML(){
   return '<div class="board">' + STATUSES.map(s => {
     const arr = tasks.filter(x => x.status === s).sort((a, b) => ((dueMs(a) ?? 9e15) - (dueMs(b) ?? 9e15)) || (PRANK[a.priority] - PRANK[b.priority]));
     return '<div class="col" data-status="' + s + '"><h3><span class="st st-' + s + '">' + U.esc(t('status.' + s)) + '</span><span class="muted">' + arr.length + '</span><button class="icon-btn sm" style="margin-inline-start:auto" data-act="coladd" data-s="' + s + '" aria-label="' + U.esc(t('newTask')) + '">' + I('plus', 'sm') + '</button></h3>' +
-      arr.map(x => '<div class="kcard" draggable="true" data-id="' + x.id + '" data-act="edit"><div class="row" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" class="cb" style="width:20px;height:20px;border-radius:6px" data-act="done" ' + (isDone(x) ? 'checked' : '') + '><div class="grow tt" style="font-weight:600;' + (isDone(x) ? 'text-decoration:line-through;color:var(--muted)' : '') + '">' + U.esc(x.title) + '</div></div>' + metaRow(x) + '</div>').join('') + '</div>';
+      arr.map(x => '<div class="kcard' + tcls(x) + '" ' + tsty(x) + ' draggable="true" data-id="' + x.id + '" data-act="edit"><div class="row" style="flex-wrap:nowrap;align-items:flex-start"><input type="checkbox" class="cb" style="width:20px;height:20px;border-radius:6px" data-act="done" ' + (isDone(x) ? 'checked' : '') + '><div class="grow tt" style="font-weight:600;' + (isDone(x) ? 'text-decoration:line-through;color:var(--muted)' : '') + '">' + U.esc(x.title) + '</div></div>' + metaRow(x) + '</div>').join('') + '</div>';
   }).join('') + '</div>';
 }
 function notesHTML(){
@@ -166,6 +170,98 @@ function blank(o){
 function quickAdd(){
   const inp = $('#qadd'); const v = inp.value.trim(); if (!v) { inp.focus(); return; }
   T().unshift(blank({ title: v })); refresh(); const n = $('#qadd'); n && n.focus();
+}
+
+
+/* ---------- multi-select + right-click (shared engine in select.js) ---------- */
+const TT = (a, e) => MSA.T(a, e);
+const real = list => list.filter(x => !x.routine);
+const nowK = () => ymd(Date.now());
+const addDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return U.dateKey(d); };
+const timeOf = x => (x.due && /T(\d\d:\d\d)/.exec(x.due) || [])[1] || '09:00';
+function noteColorSub(cur){
+  const light = document.documentElement.dataset.theme === 'light', arr = light ? NCOLORS_L : NCOLORS, names = [['بدون لون', 'No colour'], ['أصفر', 'Yellow'], ['أخضر', 'Green'], ['أزرق', 'Blue'], ['وردي', 'Pink'], ['برتقالي', 'Orange'], ['بنفسجي', 'Purple']];
+  return names.map((n, i) => ({ id: 'ncol:' + i, label: TT(n[0], n[1]), dot: i ? arr[i] : '#9aa0a6', icon: (cur === NCOLORS[i] || cur === NCOLORS_L[i]) ? 'check' : '' }));
+}
+function entriesFor(list, el){
+  const E = (id, label, icon, o) => Object.assign({ id, label, icon }, o || {});
+  const tasks = list.filter(x => x.type === 'task'), notes = list.filter(x => x.type === 'note'), one = list.length === 1, n = list.length;
+  const L = [];
+  if (one) L.push(E('edit', TT('فتح / تعديل', 'Open / edit'), 'pencil', { key: 'Enter' }));
+  if (tasks.length) {
+    const all = tasks.every(isDone);
+    L.push(E(all ? 'reopen' : 'done', all ? TT('إعادة فتح', 'Reopen') : TT('إنجاز', 'Mark done'), 'check'));
+    L.push(E('mvst', TT('نقل إلى…', 'Move to…'), 'kanban', { sub: STATUSES.map(s => E('st:' + s, t('status.' + s), tasks.every(x => x.status === s) ? 'check' : '')) }));
+    L.push(E('prio', TT('الأولوية', 'Priority'), 'flag', { sub: PRIOS.map(p => E('pr:' + p, t('prio.' + p), tasks.every(x => x.priority === p) ? 'check' : '')) }));
+    L.push(E('due', TT('الميعاد', 'Due date'), 'calendar', { sub: [E('due:today', TT('النهارده', 'Today'), 'calendar'), E('due:tom', TT('بكرة', 'Tomorrow'), 'calendar'), E('due:week', TT('بعد أسبوع', 'In a week'), 'calendar'), E('due:clear', TT('بدون ميعاد', 'No due date'), 'x')] }));
+  }
+  const cur = list[0] && list[0].color || '';
+  if (tasks.length && !notes.length) L.push(E('color', TT('تلوين', 'Colour'), 'palette', { sub: MSA.multi.colorSub(list.every(x => (x.color || '') === cur) ? cur : null, 'col') }));
+  else if (notes.length && !tasks.length) L.push(E('color', TT('تلوين', 'Colour'), 'palette', { sub: noteColorSub(list.every(x => (x.color || '') === cur) ? cur : null) }));
+  if (notes.length) L.push(E('pin', notes.every(x => x.pinned) ? TT('إلغاء التثبيت', 'Unpin') : TT('تثبيت', 'Pin'), 'pin'));
+  L.push('-', E('dup', TT('نسخ (تكرار)', 'Duplicate'), 'copy'), E('copytxt', TT('نسخ النص', 'Copy text'), 'clip'));
+  if (tasks.length && !notes.length) L.push(E('conv', TT('تحويل لملاحظة', 'Convert to note'), 'note')); else if (notes.length && !tasks.length) L.push(E('conv', TT('تحويل لمهمة', 'Convert to task'), 'checks'));
+  if (el) L.push(E('sel', TT('تحديد', 'Select'), 'checks'));
+  L.push('-', E('del', n > 1 ? TT('حذف ' + n + ' عنصر', 'Delete ' + n + ' items') : TT('حذف', 'Delete'), 'trash', { danger: true, key: 'Del' }));
+  return L;
+}
+async function cloneAtts(atts){
+  const out = [];
+  for (const a of atts || []) { try { const rec = await MSA.files.get(a.id); if (rec) out.push(await MSA.files.put(new File([rec.blob], a.name || 'file', { type: rec.mime || a.mime || '' }))); } catch (e) {} }
+  return out;
+}
+async function dupItems(list){
+  const made = [];
+  for (const x of list) {
+    const c = JSON.parse(JSON.stringify(x)); c.id = U.uid('t'); c.title = (x.title || '') + ' ' + TT('(نسخة)', '(copy)'); c.created = c.updated = Date.now(); c.notified = false; c.atts = await cloneAtts(x.atts);
+    const i = T().indexOf(x); T().splice(i < 0 ? 0 : i + 1, 0, c); made.push(c);
+  }
+  MSA.multi.clear('tasks'); refresh(); MSA.toast(TT('اتعمل ' + made.length + ' نسخة', made.length + ' duplicated'), 'ok');
+}
+async function delItems(list){
+  const n = list.length, q = n > 1 ? TT('حذف ' + n + ' عنصر؟', 'Delete ' + n + ' items?') : t('delTaskQ', { n: list[0].title || t('untitled') });
+  if (!await MSA.confirm(q, { danger: true, okLabel: t('delete') })) return;
+  const snap = list.map(x => ({ x, i: T().indexOf(x) })).sort((a, b) => a.i - b.i), ids = new Set(list.map(x => x.id));
+  MSA.state.tasks = T().filter(x => !ids.has(x.id)); MSA.multi.clear('tasks'); refresh();
+  MSA.multi.undoToast(TT('اتحذف ' + n + ' عنصر', n + ' deleted'), () => { snap.forEach(s => T().splice(Math.min(Math.max(s.i, 0), T().length), 0, s.x)); refresh(); },
+    () => { MSA.files.delMany(list.flatMap(x => x.atts || [])).catch(() => {}); });
+}
+async function runMulti(a, list){
+  list = real(list); if (!list.length) return;
+  const tasks = list.filter(x => x.type === 'task');
+  if (a === 'edit') { openEditor(list[0]); return; }
+  if (a === 'done') tasks.forEach(x => setDone(x, true));
+  else if (a === 'reopen') tasks.forEach(x => setDone(x, false));
+  else if (a.startsWith('st:')) tasks.forEach(x => { const v = a.slice(3); if (v === 'done') setDone(x, true); else { x.status = v; delete x.completedAt; x.notified = false; } });
+  else if (a.startsWith('pr:')) tasks.forEach(x => { x.priority = a.slice(3); });
+  else if (a.startsWith('due:')) tasks.forEach(x => { const v = a.slice(4); x.due = v === 'clear' ? '' : (v === 'today' ? nowK() : v === 'tom' ? addDays(1) : addDays(7)) + 'T' + timeOf(x); x.notified = false; });
+  else if (a.startsWith('col:')) tasks.forEach(x => { x.color = a.slice(4); });
+  else if (a.startsWith('ncol:')) list.filter(x => x.type === 'note').forEach(x => { x.color = NCOLORS[+a.slice(5)] || ''; });
+  else if (a === 'pin') { const on = !list.filter(x => x.type === 'note').every(x => x.pinned); list.filter(x => x.type === 'note').forEach(x => { x.pinned = on; }); }
+  else if (a === 'conv') { list.forEach(x => { x.type = x.type === 'task' ? 'note' : 'task'; x.color = ''; if (x.type === 'task' && !x.status) x.status = 'todo'; }); MSA.multi.clear('tasks'); }
+  else if (a === 'dup') { await dupItems(list); return; }
+  else if (a === 'copytxt') { const txt = list.map(x => (x.title || '') + (x.type === 'note' && x.desc ? '\n' + U.stripHtml(x.desc) : '')).join('\n\n'); try { await navigator.clipboard.writeText(txt); MSA.toast(TT('اتنسخ النص', 'Text copied'), 'ok'); } catch (e) { MSA.toast(TT('تعذّر النسخ', 'Copy failed'), 'err'); } return; }
+  else if (a === 'del') { await delItems(list); return; }
+  else return;
+  list.forEach(x => { x.updated = Date.now(); });
+  refresh();
+}
+function bgEntries(){
+  const E = (id, label, icon, o) => Object.assign({ id, label, icon }, o || {});
+  return [E('newtask', TT('مهمة جديدة', 'New task'), 'plus'), E('newnote', TT('ملاحظة جديدة', 'New note'), 'note'), '-', E('all', TT('تحديد الكل', 'Select all'), 'checks', { key: 'Ctrl+A' }), '-',
+    E('view', TT('العرض', 'View'), 'list', { sub: [['list', 'قائمة', 'List'], ['board', 'لوحة', 'Board'], ['cal', 'تقويم', 'Calendar'], ['notes', 'ملاحظات', 'Notes']].map(v => E('view:' + v[0], TT(v[1], v[2]), view === v[0] ? 'check' : '')) }),
+    E('showdone', filt.showDone ? TT('إخفاء المنتهية', 'Hide completed') : TT('إظهار المنتهية', 'Show completed'), 'eye'), E('refresh', TT('تحديث', 'Refresh'), 'refresh', { key: 'F5' })];
+}
+function bgRun(a){
+  if (a === 'newtask') openEditor(null, { type: 'task' }); else if (a === 'newnote') openEditor(null, { type: 'note' });
+  else if (a.startsWith('view:')) { MSA.state.ui.tasksView = a.slice(5); MSA.save(); MSA.rerender(false); }
+  else if (a === 'showdone') { filt.showDone = !filt.showDone; MSA.rerender(); } else if (a === 'refresh') MSA.rerender(true);
+}
+function wireMulti(host){
+  if (!MSA.multi) return;
+  MSA.multi.attach(host, { key: 'tasks', item: '.trow,.kcard,.ncard,.ev[data-id]', btnHost: '.page-head .row', bar: ['done', 'mvst', 'color', 'dup', 'del'],
+    idOf: el => el.dataset.id, objOf: id => T().find(x => x.id === id && !x.routine),
+    entries: (list, el) => entriesFor(list, el), run: (a, list) => runMulti(a, list), bgEntries, bgRun });
 }
 
 /* ---------- editor drawer ---------- */

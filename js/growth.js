@@ -142,6 +142,22 @@ function leadsRender(host){
         '<span class="grow"></span><button class="icon-btn sm" data-gr="hist" data-id="' + l.id + '" title="' + esc(T('السجل', 'History')) + '">' + I('clock', 'sm') + '</button><button class="icon-btn sm" data-gr="edit" data-id="' + l.id + '" title="' + esc(T('تعديل', 'Edit')) + '">' + I('pencil', 'sm') + '</button><button class="icon-btn sm danger" data-gr="del" data-id="' + l.id + '" title="' + esc(T('حذف', 'Delete')) + '">' + I('trash', 'sm') + '</button></div></div>';
     }).join('') + '</div>' : '<div class="cs-empty">' + I('user') + '<div>' + esc(all.length ? T('لا نتائج مطابقة', 'No matching leads') : T('لسه مفيش عملاء محتملين — سجّل أول واحد سأل عن شغلك', 'No leads yet — add the first person who asked about your work')) + '</div></div>');
   const again = () => { MSA.save(); MSA.rerender(true); };
+  if (MSA.multi) {
+    const LE = (id, label, icon, o) => Object.assign({ id, label, icon }, o || {});
+    MSA.multi.attach(host, { key: 'leads', item: '.gr-lead[data-id]', btnHost: '.page-head > .row', bar: ['stage', 'del'], idOf: el => el.dataset.id, objOf: id => leads().find(x => x.id === id),
+      entries: (list, el) => { const L = [];
+        if (list.length === 1) L.push(LE('edit', T('تعديل', 'Edit'), 'pencil', { key: 'Enter' }));
+        L.push(LE('stage', T('تغيير المرحلة', 'Change stage'), 'flag', { sub: STAGES.map(x => LE('st:' + x[0], T(x[1], x[2]), list.every(l => l.stage === x[0]) ? 'check' : '')) }),
+          LE('copytxt', T('نسخ الاسم', 'Copy name'), 'clip')); if (el) L.push(LE('sel', T('تحديد', 'Select'), 'checks'));
+        L.push('-', LE('del', list.length > 1 ? T('حذف ' + list.length + ' عميل محتمل', 'Delete ' + list.length + ' leads') : T('حذف', 'Delete'), 'trash', { danger: true, key: 'Del' })); return L; },
+      run: async (a, list) => {
+        if (a === 'edit') leadForm(list[0], (n, won) => { MSA.rerender(true); if (won && !n.converted) wonPrompt(n); });
+        else if (a.startsWith('st:')) { const v = a.slice(3); list.forEach(l => { if (l.stage === v) return; l.stage = v; hist(l, T('المرحلة: ', 'Stage: ') + stName(v)); if (v === 'won' || v === 'lost') l.closed = Date.now(); else delete l.closed; if (v === 'won') l.wonAt = Date.now(); if (v === 'quoted' && !l.next) l.next = addDays(today(), 3); syncLeadTask(l); }); again(); }
+        else if (a === 'copytxt') { try { await navigator.clipboard.writeText(list.map(l => l.name).join('\n')); MSA.toast(T('اتنسخ', 'Copied'), 'ok'); } catch (e) {} }
+        else if (a === 'del') { if (!await MSA.confirm(list.length > 1 ? T('حذف ' + list.length + ' عميل محتمل؟', 'Delete ' + list.length + ' leads?') : T('حذف «' + list[0].name + '» من العملاء المحتملين؟', 'Delete “' + list[0].name + '” from leads?'), { danger: true, okLabel: T('حذف', 'Delete') })) return; const ids = new Set(list.map(l => l.id)); dropTasks(t => t.src && ids.has(t.src.lead)); S().leads = leads().filter(x => !ids.has(x.id)); MSA.multi.clear('leads'); again(); }
+      },
+      bgEntries: () => [LE('all', T('تحديد الكل', 'Select all'), 'checks', { key: 'Ctrl+A' })], bgRun: () => {} });
+  }
   host.onclick = async e => {
     const b = e.target.closest('[data-gr]'); if (!b) return; const a = b.dataset.gr, l = leads().find(x => x.id === b.dataset.id);
     if (a === 'done') { S().ui.doneClient = null; MSA.go('done'); }

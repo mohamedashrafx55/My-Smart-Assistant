@@ -84,9 +84,9 @@ function render(host){
   if (!p) {
     html += MSA.empty('briefcase', t('active.empty'), t('active.emptySub')) +
       '<div style="text-align:center;margin-top:16px"><button class="btn primary" data-act="new">' + I('plus', 'sm') + U.esc(t('newProject')) + '</button></div>';
-    host.innerHTML = html; bind(host); return;
+    host.innerHTML = html; bind(host); P.wireMulti(host, 'active'); return;
   }
-  html += '<div class="tabs-scroll">' + act.map(x => { const pr = P.progress(x); return '<button class="ptab ' + (x.id === p.id ? 'on' : '') + '" data-act="pick" data-id="' + x.id + '"><span class="n">' + U.esc(x.name) + '</span><span class="pct">' + pr.pct + '%</span></button>'; }).join('') + '</div>';
+  html += '<div class="tabs-scroll">' + act.map(x => { const pr = P.progress(x); return '<button class="ptab ' + (x.id === p.id ? 'on' : '') + P.pcls(x) + '" ' + P.psty(x) + ' data-act="pick" data-id="' + x.id + '"><span class="n">' + U.esc(x.name) + '</span><span class="pct">' + pr.pct + '%</span></button>'; }).join('') + '</div>';
   const pr = P.progress(p);
   html += '<div class="card proj-top"><div class="row" style="justify-content:space-between;margin-bottom:12px"><div><h2>' + U.esc(p.name) + '</h2><button class="chip clchip" data-act="pclient">' + I('user', 'xs') + '<span>' + U.esc(MSA.clients.of(p) || MSA.T('تعيين عميل', 'Set client')) + '</span></button></div>' +
     '<div class="row">' + (tab() === 'plan' && mode() === 'map' ? '<button class="btn sm' + (P.mapEditing && P.mapEditing() ? ' primary' : '') + '" data-act="medit">' + I('pencil', 'sm') + '<span>' + U.esc(t('map.edit')) + '</span></button>' : '') + (tab() === 'plan' ? '<div class="seg" role="tablist"><button data-act="pview" data-v="map" class="' + (mode() === 'map' ? 'on' : '') + '">' + I('layers', 'sm') + U.esc(t('view.map')) + '</button><button data-act="pview" data-v="list" class="' + (mode() === 'list' ? 'on' : '') + '">' + I('list', 'sm') + U.esc(t('view.list')) + '</button></div><button class="btn sm" data-act="addstep">' + I('plus', 'sm') + U.esc(t('addStep')) + '</button>' + '<button class="btn sm" data-act="savetpl" title="' + U.esc(MSA.T('حفظ كقالب','Save as template')) + '">' + I('copy', 'sm') + '</button>' : '') +
@@ -103,7 +103,7 @@ function render(host){
   host.innerHTML = html; MSA.apps.hydrate(host);
   if (tab() !== 'plan') MSA.studio.render(tab(), p, host.querySelector('#stHost'));
   else if (p.steps.length && mode() === 'map') P.renderMap(host.querySelector('#mapHost'), p);
-  bind(host);
+  bind(host); P.wireMulti(host, 'active');
 }
 
 function bind(host){
@@ -217,6 +217,51 @@ function newProject(pre){
   });
 }
 MSA.newProject = newProject;
+
+/* ---------- multi-select + right-click for project lists (active tabs, completed cards) ---------- */
+P.pcls = x => /^#[0-9a-f]{6}$/i.test(x.color || '') ? ' pcol' : '';
+P.psty = x => /^#[0-9a-f]{6}$/i.test(x.color || '') ? 'style="--pcol:' + x.color + '"' : '';
+const PT = (a, e) => MSA.T(a, e);
+P.entries = (list, mode, el) => {
+  const E = (id, label, icon, o) => Object.assign({ id, label, icon }, o || {}), one = list.length === 1, n = list.length, cur = list[0].color || '', L = [];
+  if (one) L.push(E('open', mode === 'done' ? PT('فتح', 'Open') : PT('فتح المشروع', 'Open project'), 'folder-open', { key: 'Enter' }));
+  if (one && mode === 'done') L.push(E('present', t('present'), 'play'));
+  L.push(mode === 'done' ? E('reopen', PT('إعادة فتح المشروع', 'Reopen'), 'refresh') : E('complete', t('markComplete'), 'trophy'));
+  L.push(E('client', PT('تعيين / نقل لعميل…', 'Set client…'), 'user'));
+  L.push(E('color', PT('تلوين', 'Colour'), 'palette', { sub: MSA.multi.colorSub(list.every(x => (x.color || '') === cur) ? cur : null, 'col') }));
+  if (one) L.push(E('ren', PT('إعادة تسمية', 'Rename'), 'pencil'));
+  L.push(E('copytxt', PT('نسخ الاسم', 'Copy name'), 'clip'));
+  if (el) L.push(E('sel', PT('تحديد', 'Select'), 'checks'));
+  L.push('-', E('del', n > 1 ? PT('حذف ' + n + ' مشروع', 'Delete ' + n + ' projects') : PT('حذف المشروع', 'Delete project'), 'trash', { danger: true, key: 'Del' }));
+  return L;
+};
+P.run = async (a, list, mode) => {
+  const st = MSA.state, ids = new Set(list.map(x => x.id)), refresh = () => { MSA.save(); MSA.updateCounts(); MSA.rerender(true); };
+  if (a === 'open') { if (mode === 'done') st.ui.doneOpen = list[0].id; else st.ui.project = list[0].id; MSA.save(); MSA.rerender(false); }
+  else if (a === 'present') MSA.present(list[0]);
+  else if (a === 'complete') {
+    if (!await MSA.confirm(list.length > 1 ? PT('هتنقل ' + list.length + ' مشروع للمكتملة. تكمل؟', 'Move ' + list.length + ' projects to Completed?') : t('completeQ', { n: list[0].name }), { okLabel: t('markComplete') })) return;
+    list.forEach(p => { p.status = 'done'; p.completedAt = Date.now(); if (st.ui.project === p.id) st.ui.project = null; }); MSA.multi.clear('proj-active'); refresh(); MSA.toast(t('movedToDone'), 'ok', 3200);
+  } else if (a === 'reopen') {
+    if (!await MSA.confirm(list.length > 1 ? PT('هترجّع ' + list.length + ' مشروع لقيد التنفيذ. تكمل؟', 'Reopen ' + list.length + ' projects?') : t('reopenQ', { n: list[0].name }))) return;
+    list.forEach(p => { p.status = 'active'; delete p.completedAt; }); MSA.multi.clear('proj-done'); refresh(); MSA.toast(t('reopened'));
+  } else if (a.startsWith('col:')) { list.forEach(p => { p.color = a.slice(4); }); refresh(); }
+  else if (a === 'client') { const v = await MSA.clients.pick(MSA.clients.of(list[0]) || '', PT('العميل', 'Client')); if (v == null) return; list.forEach(p => { p.client = v; if (p.time) p.time.client = v; }); if (v) MSA.clients.ensure(v); refresh(); }
+  else if (a === 'ren') { const v = await MSA.ask({ title: t('renameProject'), value: list[0].name }); if (v) { list[0].name = v; refresh(); } }
+  else if (a === 'copytxt') { try { await navigator.clipboard.writeText(list.map(p => p.name).join('\n')); MSA.toast(PT('اتنسخ', 'Copied'), 'ok'); } catch (e) { MSA.toast(PT('تعذّر النسخ', 'Copy failed'), 'err'); } }
+  else if (a === 'del') {
+    if (!await MSA.confirm(list.length > 1 ? PT('حذف ' + list.length + ' مشروع بكل ملفاته؟ مفيش تراجع.', 'Delete ' + list.length + ' projects with all their files? This cannot be undone.') : t('delProjQ', { n: list[0].name }), { danger: true, okLabel: t('delete') })) return;
+    await MSA.files.delMany(list.flatMap(p => P.ownedAtts(p.steps).concat(MSA.cover.extraAll(p.steps), MSA.cover.extra(p))));
+    st.projects = st.projects.filter(x => !ids.has(x.id)); if (ids.has(st.ui.project)) st.ui.project = null; if (ids.has(st.ui.doneOpen)) st.ui.doneOpen = null; MSA.multi.clear('proj-active'); MSA.multi.clear('proj-done'); refresh();
+  }
+};
+P.wireMulti = (host, mode) => {
+  if (!MSA.multi) return; const key = mode === 'done' ? 'proj-done' : 'proj-active', byId = id => MSA.state.projects.find(x => x.id === id && (mode === 'done' ? x.status === 'done' : x.status !== 'done'));
+  MSA.multi.attach(host, { key, noKeys: true, item: mode === 'done' ? '.pcard[data-id]' : '.ptab[data-id]', btnHost: '.page-head > .row', bar: mode === 'done' ? ['reopen', 'client', 'color', 'del'] : ['complete', 'client', 'color', 'del'],
+    idOf: el => el.dataset.id, objOf: byId, entries: (list, el) => P.entries(list, mode, el), run: (a, list) => P.run(a, list, mode),
+    });
+};
+
 MSA.views.active = { render };
 })();
 

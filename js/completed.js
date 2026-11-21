@@ -21,7 +21,7 @@ const T2 = (a, e) => MSA.T(a, e);
 const NONE = '__none';
 function cardHTML(p){
   const k = countKinds(p), img = firstImage(p), pr = P.progress(p), cl = CL().of(p);
-  return '<article class="card pcard" data-act="open" data-id="' + p.id + '"><div class="cover" ' + (img ? 'data-cover="' + img.id + '"' : '') + ' style="background-image:' + (img ? 'none' : grad(p.name)) + '">' +
+  return '<article class="card pcard' + P.pcls(p) + '" ' + P.psty(p) + ' data-act="open" data-id="' + p.id + '"><div class="cover" ' + (img ? 'data-cover="' + img.id + '"' : '') + ' style="background-image:' + (img ? 'none' : grad(p.name)) + '">' +
     (img ? '' : U.esc(Array.from(p.name)[0] || '·').toUpperCase()) +
     '<span class="badge">' + I('check', 'sm') + U.esc(MSA.fmtDate(p.completedAt)) + '</span></div>' +
     '<div class="body"><div class="row" style="justify-content:space-between;align-items:flex-start"><h3>' + U.esc(p.name) + '</h3><button class="icon-btn sm" data-act="pmenu" data-id="' + p.id + '" aria-label="more">' + I('more', 'sm') + '</button></div><div class="hint">' + U.esc(t('stepsDone', { a: pr.done, b: pr.total })) + ' · ' + (k.image + k.video + k.audio + k.doc) + ' ' + U.esc(t('files')) + '</div>' +
@@ -54,6 +54,7 @@ function render(host){
   }).join('') + '</div>';
   host.innerHTML = html;
   hydrateCovers(host);
+  P.wireMulti(host, 'done');
   const go = fn => el => { fn(el); MSA.save(); MSA.rerender(false); const v = $('#view'); if (v) v.scrollTop = 0; };
   MSA.on(host, {
     open: el => { MSA.state.ui.doneOpen = el.dataset.id; MSA.save(); MSA.rerender(false); $('#view').scrollTop = 0; },
