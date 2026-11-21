@@ -427,7 +427,7 @@ P.renderMap = function(box, p){
       const atts = P.ownedAtts([r.step]).concat(MSA.cover.extraAll([r.step])); r.list.splice(r.index, 1); await MSA.files.delMany(atts);
       esel = null; commit(); MSA.updateCounts && MSA.updateCounts(); MSA.rerender();
     }
-    else if (a === 'edel' && esel_e >= 0) { p.graph.edges.splice(esel_e, 1); esel_e = -1; commit(); redo(); }
+    else if (a === 'edel' && esel_e >= 0) { if (!await MSA.confirmDel(MSA.T('حذف الرابط؟', 'Delete this link?'))) return; p.graph.edges.splice(esel_e, 1); esel_e = -1; commit(); redo(); }
     else if (a === 'estr' && esel_e >= 0) { p.graph.edges[esel_e].length = 2; commit(); redo(); }
     else if (a === 'erev' && esel_e >= 0) { const e = p.graph.edges[esel_e]; p.graph.edges[esel_e] = [e[1], e[0]]; commit(); redo(); }
   };

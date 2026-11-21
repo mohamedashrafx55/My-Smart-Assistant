@@ -35,14 +35,14 @@ function paint(host){
 }
 function drawBar(){
   const h = active; const ok = hostOk(h), s = ok && sets[h._ms.cfg.key], n = ok ? s.ids.size : 0;
-  if (!n) { if (bar) { bar.remove(); bar = null; } return; }
-  const c = h._ms.cfg, list = objs(h), ents = c.entries(list, null).filter(e => e !== '-');
+  if (!n && !(ok && s.mode)) { if (bar) { bar.remove(); bar = null; } return; }
+  const c = h._ms.cfg, list = n ? objs(h) : [], ents = n ? c.entries(list, null).filter(e => e !== '-') : [];
   const pick = (c.bar || []).map(id => ents.find(e => e.id === id)).filter(Boolean);
   if (!bar) { bar = document.createElement('div'); bar.className = 'ms-bar'; bar.setAttribute('role', 'toolbar'); document.body.appendChild(bar); bar.addEventListener('click', onBar); }
   bar.innerHTML = '<b class="ms-n">' + esc(T(n + ' محدد', n + ' selected')) + '</b>' +
-    '<button class="ms-b" data-ms="all" title="' + esc(T('تحديد الكل', 'Select all')) + '">' + I('checks', 'sm') + '</button>' +
+    '<button class="ms-b" data-ms="all" title="' + esc(T('تحديد الكل', 'Select all')) + '">' + I('checks', 'sm') + '<span class="ms-l">' + esc(T('تحديد الكل', 'Select all')) + '</span></button>' +
     pick.map(e => '<button class="ms-b' + (e.danger ? ' danger' : '') + '" data-ms="a:' + esc(e.id) + '" title="' + esc(e.label) + '">' + (e.dot ? '<i class="fm-dot" style="background:' + esc(e.dot) + '"></i>' : I(e.icon || 'minus', 'sm')) + '<span class="ms-l">' + esc(e.label) + '</span></button>').join('') +
-    '<button class="ms-b" data-ms="more" title="' + esc(T('المزيد', 'More')) + '">' + I('more', 'sm') + '</button>' +
+    (n ? '<button class="ms-b" data-ms="more" title="' + esc(T('المزيد', 'More')) + '">' + I('more', 'sm') + '</button>' : '') +
     '<button class="ms-b" data-ms="clr" title="' + esc(T('إلغاء التحديد', 'Clear selection')) + '">' + I('x', 'sm') + '</button>';
 }
 function onBar(e){
@@ -79,9 +79,9 @@ function install(host){
     const ctl = isCtl(e.target), inner = ctl && ctl !== el && el.contains(ctl);
     const mod = e.ctrlKey || e.metaKey, shift = e.shiftKey, selecting = s.ids.size > 0 || s.mode;
     if (!mod && !shift && !selecting) return;
-    if (inner && !mod && !shift) return;
+    if (inner && !mod && !shift && !(c.ctlSelect && selecting && !e.target.closest('input,select,textarea'))) return;
     const id = c.idOf(el); if (id == null) return;
-    e.preventDefault(); e.stopPropagation();
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
     if (shift && last != null && !mod) range(host, id); else toggle(host, id);
   }, true);
   host.addEventListener('contextmenu', e => {
@@ -130,5 +130,35 @@ const dotColors = ['#e5484d', '#f59e0b', '#eab308', '#22c55e', '#06b6d4', '#3b82
 const dotNames = [['أحمر', 'Red'], ['برتقالي', 'Orange'], ['أصفر', 'Yellow'], ['أخضر', 'Green'], ['سماوي', 'Cyan'], ['أزرق', 'Blue'], ['بنفسجي', 'Purple'], ['وردي', 'Pink']];
 const colorSub = (cur, prefix) => [{ id: prefix + ':', label: T('بدون لون', 'No colour'), icon: cur === '' ? 'check' : '' }].concat(dotColors.map((c, i) => ({ id: prefix + ':' + c, label: T(dotNames[i][0], dotNames[i][1]), dot: c, icon: cur === c ? 'check' : '' })));
 
-MSA.multi = { attach, clear, selectAll: selectAll, ids: key => Array.from((sets[key] || { ids: [] }).ids), count: key => (sets[key] ? sets[key].ids.size : 0), undoToast, colorSub, COLORS: dotColors, bar: () => bar };
+/* ---- simple wiring for flat lists: colour + select-all + confirmed delete + a few per-item actions ----
+   o = { key, item, get(id)->obj, extra:[{id,label,icon,single,sub(list),run(list,subId)}], del(list) (async), refresh(), color:false to disable,
+         btnHost, noKeys, bgMenu:false, bar:[ids] } */
+function simple(host, o){
+  const refresh = o.refresh || (() => { MSA.save(); MSA.rerender(true); }), extra = o.extra || [];
+  const cur = list => { const v = list.map(x => x.color || ''); return v.every(c => c === v[0]) ? v[0] : null; };
+  const entries = list => {
+    const one = list.length === 1, E = [{ id: 'sel', label: T('تحديد', 'Select'), icon: 'checks' }];
+    extra.forEach(x => { if (x.single && !one) return; if (x.when && !x.when(list)) return; E.push(Object.assign({ id: x.id, label: x.label, icon: x.icon }, x.sub ? { sub: x.sub(list) } : {})); });
+    if (o.color !== false) E.push({ id: 'color', label: T('تلوين', 'Colour'), icon: 'palette', sub: colorSub(cur(list), 'col') });
+    E.push('-'); E.push({ id: 'del', label: T('حذف', 'Delete') + (list.length > 1 ? ' (' + list.length + ')' : ''), icon: 'trash', danger: true });
+    return E;
+  };
+  const run = async (id, list) => {
+    if (id === 'sel') return;
+    if (id.startsWith('col:')) { const v = id.slice(4); list.forEach(x => { if (v) x.color = v; else delete x.color; }); refresh(); return; }
+    if (id === 'del') {
+      const n = list.length, nm = n === 1 && o.name ? o.name(list[0]) : '';
+      if (!await MSA.confirm(n === 1 ? T('حذف «' + nm + '»؟', 'Delete “' + nm + '”?') : T('حذف ' + n + ' عنصر؟ مش هتقدر ترجّعهم.', 'Delete ' + n + ' items? This cannot be undone.'), { danger: true, okLabel: T('حذف', 'Delete') })) return;
+      await o.del(list); clear(o.key); refresh(); return;
+    }
+    const x = extra.find(y => y.id === id || id.startsWith(y.id + ':')); if (x) await x.run(list, id.indexOf(':') > 0 ? id.slice(id.indexOf(':') + 1) : '');
+  };
+  attach(host, { key: o.key, item: o.item, idOf: el => el.dataset.id || el.dataset.row, objOf: o.get, noKeys: o.noKeys, ctlSelect: o.ctlSelect, btnHost: o.btnHost, entries, run,
+    bar: o.bar || extra.filter(x => !x.single).map(x => x.id).concat(['color', 'del']).filter(id => id !== 'color' || o.color !== false),
+    bgEntries: o.bgMenu === false ? undefined : () => [{ id: 'all', label: T('تحديد الكل', 'Select all'), icon: 'checks' }], bgRun: () => {} });
+}
+const mc = (x, frame) => x && x.color ? { cls: frame ? ' mcol mfr' : ' mcol', sty: ' style="--mcol:' + esc(x.color) + '"' } : { cls: '', sty: '' };
+
+MSA.confirmDel = msg => MSA.confirm(msg || T('متأكد إنك عايز تحذف؟ مش هتقدر ترجّعه.', 'Delete this? It cannot be undone.'), { danger: true, okLabel: T('حذف', 'Delete') });
+MSA.multi = { simple, mc, attach, clear, selectAll: selectAll, ids: key => Array.from((sets[key] || { ids: [] }).ids), count: key => (sets[key] ? sets[key].ids.size : 0), undoToast, colorSub, COLORS: dotColors, bar: () => bar };
 })();

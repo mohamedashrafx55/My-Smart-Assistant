@@ -79,7 +79,7 @@ function todoTab(body, step, ctx){
     else if (a === 'fold' && sec) { sec.fold = !sec.fold; ctx.commit(); draw(); }
     else if (a === 'col' && sec) { sec.col = COLS[(COLS.indexOf(sec.col) + 1) % COLS.length]; save(); draw(); }
     else if (a === 'delsec' && sec) { if (sec.items.length && !await MSA.confirm(T('حذف القسم «' + sec.title + '» وبنوده؟', 'Delete the section “' + sec.title + '” and its items?'), { danger: true, okLabel: T('حذف', 'Delete') })) return; tdo(step).sections = tdo(step).sections.filter(x => x !== sec); save(); draw(); }
-    else if (a === 'delit' && sec) { sec.items = sec.items.filter(x => x.id !== b.closest('[data-it]').dataset.it); save(); draw(); }
+    else if (a === 'delit' && sec) { if (!await MSA.confirmDel(T('حذف هذا البند؟', 'Delete this item?'))) return; sec.items = sec.items.filter(x => x.id !== b.closest('[data-it]').dataset.it); save(); draw(); }
   };
 }
 
@@ -192,9 +192,9 @@ C.wireMap = ctx => {
   };
   det.addEventListener('pointerup', end); det.addEventListener('pointercancel', end);
   /* frames: toggle to-do boxes, delete, open the cell */
-  world.addEventListener('click', e => {
+  world.addEventListener('click', async e => {
     const cb = e.target.closest('[data-ctg]'); if (cb) { const [sid, iid] = cb.dataset.ctg.split(':'), card = cb.closest('[data-card]'), c = cardsOf(p).find(x => x.id === card.dataset.card), r = c && P.find(p.steps, c.s), t = r && todo(r.step); const it = t && t.sections.flatMap(s => s.items).find(i => i.id === iid); if (it) { it.done = cb.checked; ctx.commit(); C.refreshCards(ctx, c.s); ctx.refreshBadge && ctx.refreshBadge(r.step); } return; }
-    const dl = e.target.closest('[data-cdel]'); if (dl) { const g = p.graph; g.cards = (g.cards || []).filter(c => c.id !== dl.dataset.cdel); ctx.commit(); ctx.redo(); return; }
+    const dl = e.target.closest('[data-cdel]'); if (dl) { if (!await MSA.confirmDel(T('حذف الكارت من اللوحة؟', 'Remove this card from the board?'))) return; const g = p.graph; g.cards = (g.cards || []).filter(c => c.id !== dl.dataset.cdel); ctx.commit(); ctx.redo(); return; }
     const card = e.target.closest('.mcard'); if (card && !ctx.editing() && !e.target.closest('.att')) { const c = cardsOf(p).find(x => x.id === card.dataset.card); if (c) { MSA.state.ui.celTab = c.k === 'todo' ? 'todo' : c.k === 'doc' ? 'doc' : 'props'; ctx.open(c.s); } }
   });
   /* move / resize in edit mode */

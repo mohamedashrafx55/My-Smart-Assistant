@@ -373,7 +373,7 @@ function openIdentity(p){
   render();
   root.addEventListener('click', async e => {
     const fv = e.target.closest('[data-id-fav]'); if (fv) { const f = id.fonts[+fv.dataset.idFav]; if (f) { f.fav = !f.fav; if (!f.fav) delete f.fav; MSA.save(); render(); } return; }
-    const r = e.target.closest('[data-id-rm]'); if (r) { const [k, i] = r.dataset.idRm.split(':'); id[k].splice(+i, 1); MSA.save(); render(); return; }
+    const r = e.target.closest('[data-id-rm]'); if (r) { if (!await MSA.confirmDel()) return; const [k, i] = r.dataset.idRm.split(':'); id[k].splice(+i, 1); MSA.save(); render(); return; }
     const cp = e.target.closest('[data-sg=copy]'); if (cp) { try { await navigator.clipboard.writeText(cp.dataset.v); MSA.toast(T('تم النسخ', 'Copied')); } catch (x) {} return; }
     if (e.target.closest('[data-id-explore]')) { MSA.explore && MSA.explore.open(p, {}); return; }
     if (e.target.closest('[data-id-css]')) {

@@ -134,7 +134,7 @@ async def main():
         ok('phone: no errors', not pm.errs, pm.errs[:3])
         # ---------- clean-up ----------
         pc=await e.page(lang='ar',demo=True)
-        before=await pc.evaluate("[MSA.state.projects.length,MSA.state.tasks.length,MSA.state.refFolders.length]")
+        before=await pc.evaluate("[MSA.state.projects.length,MSA.state.tasks.filter(x=>!x.routine).length,MSA.state.refFolders.length]")
         ok('demo data present before cleaning', before[0]>=1 and before[1]>=1, before)
         nf0=await pc.evaluate("MSA.files.ids().then(a=>a.length)")
         t=asyncio.ensure_future(pc.evaluate("MSA.clean.run()")); await pc.wait_for_selector('[data-a=keep]'); await pc.click('[data-a=keep]'); await t
@@ -143,7 +143,7 @@ async def main():
         async with pc.expect_download() as dl: await pc.click('[data-a=bk]')
         d=await dl.value; ok('backup saved before cleaning', 'before-clean' in d.suggested_filename, d.suggested_filename)
         await t; await pc.wait_for_timeout(500)
-        after=await pc.evaluate("[MSA.state.projects.length,MSA.state.tasks.length,MSA.state.refFolders.length,(MSA.state.clients&&MSA.state.clients.rows||[]).length]")
+        after=await pc.evaluate("[MSA.state.projects.length,MSA.state.tasks.filter(x=>!x.routine).length,MSA.state.refFolders.length,(MSA.state.clients&&MSA.state.clients.rows||[]).length]")
         nf1=await pc.evaluate("MSA.files.ids().then(a=>a.length)")
         ok('projects, tasks and notes wiped', after[0]==0 and after[1]==0, after)
         ok('sample reference folders wiped', after[2]==0, after)

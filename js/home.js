@@ -17,7 +17,7 @@ Object.assign(MSA.dict.ar, {
 const TILES = [['active', '#5b8def'], ['done', '#f0b43c'], ['learn', '#9b6bff'], ['tasks', '#3ccf91'], ['media', '#ff6b9a'], ['reports', '#18b4c8']];
 function counts(){
   const s = MSA.state, P = MSA.proj;
-  return { active: P.activeList().length, done: P.doneList().length, learn: s.learning.videos.length, tasks: s.tasks.filter(x => x.type === 'task' && x.status !== 'done').length, media: ((s.media && s.media.tracks) || []).length, reports: P.doneList().length };
+  return { active: P.activeList().length, done: P.doneList().length, learn: s.learning.videos.length, tasks: s.tasks.filter(x => x.type === 'task' && !x.routine && x.status !== 'done').length, media: ((s.media && s.media.tracks) || []).length, reports: P.doneList().length };
 }
 function render(host){
   const c = counts(), first = MSA.myName();

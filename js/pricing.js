@@ -208,9 +208,9 @@ P.docModal = function(init, onSave){
         totals();
       };
       const totals = () => { const t = docTotals(d); tot.innerHTML = '<div><span>' + esc(T('المجموع', 'Subtotal')) + '</span><b dir="ltr">' + fmt(t.sub) + '</b></div>' + (d.discount ? '<div><span>' + esc(T('خصم', 'Discount')) + '</span><b dir="ltr">-' + fmt(t.disc) + '</b></div>' : '') + (d.tax ? '<div><span>' + esc(T('ضريبة', 'Tax')) + '</span><b dir="ltr">' + fmt(t.tax) + '</b></div>' : '') + '<div class="g"><span>' + esc(T('الإجمالي', 'Total')) + '</span><b dir="ltr">' + fmt(t.total) + ' ' + esc(d.cur) + '</b></div>' + (d.type === 'quote' && d.deposit ? '<div class="hint"><span>' + esc(T('الدفعة المقدمة', 'Deposit')) + '</span><span dir="ltr">' + fmt(t.deposit) + ' ' + esc(d.cur) + '</span></div>' : ''); };
-      el.addEventListener('click', e => {
+      el.addEventListener('click', async e => {
         const ty = e.target.closest('#dcType [data-v]'); if (ty) { d.type = ty.dataset.v; draw(); return; }
-        const x = e.target.closest('[data-x]'); if (x) { d.lines.splice(+x.dataset.x, 1); draw(); return; }
+        const x = e.target.closest('[data-x]'); if (x) { if (!await MSA.confirmDel(T('حذف هذا السطر؟', 'Delete this line?'))) return; d.lines.splice(+x.dataset.x, 1); draw(); return; }
       });
       $('#dcIdent', el).onclick = () => P.identityModal();
       $('#dcFree', el).onclick = () => { d.lines.push({ name: '', qty: 1, price: 0, note: '' }); draw(); const l = $$('.dc-n', el); l[l.length - 1] && l[l.length - 1].focus(); };

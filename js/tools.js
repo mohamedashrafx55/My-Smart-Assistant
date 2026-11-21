@@ -31,7 +31,7 @@ function buildIndex(){
     const c = r.c; if (!c.name && !c.company) return;
     add({ g: 'client', icon: 'user', title: c.name || c.company, sub: [c.company && c.name ? c.company : '', c.phone || c.wa || '', c.email || ''].filter(Boolean).join(' · '), extra: Object.keys(c).map(k => c[k]).join(' '), go: () => { MSA.clients.data().q = c.name || c.company; MSA.save(); MSA.go('clients'); } });
   });
-  S().tasks.forEach(x => {
+  S().tasks.filter(x => !x.routine).forEach(x => {
     add({ g: x.type === 'note' ? 'note' : 'task', icon: x.type === 'note' ? 'note' : (x.status === 'done' ? 'check-c' : 'checks'), title: x.title || T('(بدون عنوان)', '(untitled)'), sub: (x.tags || []).join(' · '), extra: plain(x.desc) + ' ' + (x.checklist || []).map(c => c.text || c.title || '').join(' '), go: () => { MSA.go('tasks'); setTimeout(() => MSA.openTaskEditor && MSA.openTaskEditor(x), 60); } });
     (x.atts || []).forEach(a => add({ g: 'file', icon: KIND_ICON[a.kind] || 'file', title: a.name || 'file', sub: x.title || '', go: () => MSA.openAtt(a, [a]) }));
   });

@@ -165,7 +165,7 @@ function pick(step, done, tabName){
       (!x.built ? '<button class="btn" data-a="ren">' + I('pencil', 'sm') + esc(T('تغيير الاسم', 'Rename')) + '</button><button class="btn danger" data-a="del">' + I('trash', 'sm') + esc(T('حذف البرنامج', 'Delete program')) + '</button>' : '') + '</div>' });
     hydrate(mm.el);
     $('[data-a=up]', mm.el).onclick = async () => { if (await setLogo(id)) { mm.close(); draw(); } };
-    const rm = $('[data-a=rm]', mm.el); if (rm) rm.onclick = async () => { await clearLogo(id); mm.close(); draw(); };
+    const rm = $('[data-a=rm]', mm.el); if (rm) rm.onclick = async () => { if (!await MSA.confirmDel(T('إزالة اللوجو؟', 'Remove the logo?'))) return; await clearLogo(id); mm.close(); draw(); };
     const rn = $('[data-a=ren]', mm.el); if (rn) rn.onclick = async () => { const v = await MSA.ask({ title: T('اسم البرنامج', 'Program name'), value: x.name }); if (v) { const c = st().custom.find(y => y.id === id); c.name = v.slice(0, 40); MSA.save(); mm.close(); draw(); } };
     const dl = $('[data-a=del]', mm.el); if (dl) dl.onclick = async () => {
       if (!await MSA.confirm(T('حذف «' + x.name + '» من كل المراحل؟', 'Remove “' + x.name + '” from every step?'), { danger: true, okLabel: T('حذف', 'Delete') })) return;

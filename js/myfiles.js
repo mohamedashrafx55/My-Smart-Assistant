@@ -57,7 +57,8 @@ function shown(){
 function cardHTML(x, list){
   const isD = x.t === 'd', n = isD ? kids(x.id).length : 0, k = x.a && x.a.kind;
   const th = isD ? folderSvg(x.color || COLORS[0]) : (k === 'image' ? '<img data-thumb="' + x.a.id + '" alt="">' : k === 'video' ? '<video data-thumb="' + x.a.id + '" muted preload="metadata"></video>' : '<div class="fm-ico">' + I(KI[k] || 'doc', 'lg') + '</div>');
-  return '<div class="fm-card' + (sel.has(x.id) ? ' sel' : '') + (isD ? ' dir' : '') + '" data-id="' + x.id + '" draggable="true" tabindex="0" role="button" aria-label="' + esc(x.name) + '">' +
+  const mcx = isD ? { cls: '', sty: '' } : MSA.multi.mc(x, true);
+  return '<div class="fm-card' + (sel.has(x.id) ? ' sel' : '') + (isD ? ' dir' : '') + mcx.cls + '"' + mcx.sty + ' data-id="' + x.id + '" draggable="true" tabindex="0" role="button" aria-label="' + esc(x.name) + '">' +
     '<button class="fm-chk" data-fa="chk" aria-label="select">' + (sel.has(x.id) ? I('check', 'sm') : '') + '</button>' +
     '<button class="fm-star' + (x.fav ? ' on' : '') + '" data-fa="fav" aria-label="favourite" title="' + esc(T('المفضلة', 'Favourite')) + '">' + I('star', 'sm') + '</button>' +
     '<div class="fm-th">' + th + (!isD && ext(x.name) ? '<span class="fm-ext">' + esc(ext(x.name)) + '</span>' : '') + '</div>' +
@@ -75,7 +76,7 @@ function render(host){
       '<select id="fmSort" aria-label="sort">' + [['name', T('الاسم', 'Name')], ['date', T('الأحدث', 'Newest')], ['size', T('الحجم', 'Size')], ['type', T('النوع', 'Type')]].map(o => '<option value="' + o[0] + '"' + (u.sort === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>' +
       '<div class="seg" id="fmView"><button data-v="grid" class="' + (u.view !== 'list' ? 'on' : '') + '" aria-label="grid">' + I('grid', 'sm') + '</button><button data-v="list" class="' + (u.view === 'list' ? 'on' : '') + '" aria-label="list">' + I('list', 'sm') + '</button></div></div>' +
     '<div class="pchips" style="margin:6px 0 10px">' + KINDS().map(k => '<button class="pchip' + (u.f === k[0] ? ' on' : '') + '" data-fa="f" data-v="' + k[0] + '">' + (k[0] === 'fav' ? I('star', 'xs') : '') + esc(k[1]) + '</button>').join('') + '</div>' +
-    (sel.size ? '<div class="fm-sel"><b>' + esc(T(sel.size + ' محدد', sel.size + ' selected')) + '</b><button class="btn sm" data-fa="bmove">' + I('folder', 'sm') + esc(T('نقل', 'Move')) + '</button><button class="btn sm" data-fa="bfav">' + I('star', 'sm') + esc(T('مفضلة', 'Favourite')) + '</button><button class="btn sm" data-fa="bdl">' + I('download', 'sm') + esc(T('تنزيل', 'Download')) + '</button><button class="btn sm danger" data-fa="bdel">' + I('trash', 'sm') + esc(T('حذف', 'Delete')) + '</button><span class="grow"></span><button class="btn sm ghost" data-fa="bclr">' + esc(T('إلغاء التحديد', 'Clear')) + '</button></div>' : '') +
+    (sel.size ? '<div class="fm-sel"><b>' + esc(T(sel.size + ' محدد', sel.size + ' selected')) + '</b><button class="btn sm" data-fa="ball">' + I('checks', 'sm') + esc(T('تحديد الكل', 'Select all')) + '</button><button class="btn sm" data-fa="bcol">' + I('palette', 'sm') + esc(T('تلوين', 'Colour')) + '</button><button class="btn sm" data-fa="bmove">' + I('folder', 'sm') + esc(T('نقل', 'Move')) + '</button><button class="btn sm" data-fa="bfav">' + I('star', 'sm') + esc(T('مفضلة', 'Favourite')) + '</button><button class="btn sm" data-fa="bdl">' + I('download', 'sm') + esc(T('تنزيل', 'Download')) + '</button><button class="btn sm danger" data-fa="bdel">' + I('trash', 'sm') + esc(T('حذف', 'Delete')) + '</button><span class="grow"></span><button class="btn sm ghost" data-fa="bclr">' + esc(T('إلغاء التحديد', 'Clear')) + '</button></div>' : '') +
     (list.length ? '<div class="fm-grid ' + (u.view === 'list' ? 'list' : '') + '" id="fmGrid">' + list.map(x => cardHTML(x, list)).join('') + '</div>'
       : '<div class="fm-empty" id="fmGrid">' + MSA.empty('folder', flat ? T('لا نتائج', 'No results') : T('المجلد فاضي', 'This folder is empty'), flat ? '' : T('اضغط «رفع ملفات» أو اسحب ملفاتك هنا، وأنشئ مجلدات لتنظيمها.', 'Tap “Upload” or drag files here, and create folders to organise them.')) + '</div>') +
     '<div class="fm-drop" id="fmDrop" hidden>' + I('upload', 'lg') + '<b>' + esc(T('أفلت الملفات هنا', 'Drop files here')) + '</b></div></div>';
@@ -212,6 +213,7 @@ function entriesFor(x){
     if (one && isD && clip) L.push(E('pasteIn', T('لصق داخل المجلد', 'Paste into folder'), 'paste', { key: 'Ctrl+V' }));
     L.push(E('dup', T('تكرار', 'Duplicate'), 'layers'), E('mv', T('نقل إلى…', 'Move to…'), 'folder'));
     if (one) L.push(E('ren', isD ? T('تعديل الاسم واللون', 'Rename & colour') : T('إعادة تسمية', 'Rename'), 'pencil', { key: 'F2' }));
+    { const cur = (() => { const v = ts.map(y => y.t === 'd' ? (y.color || COLORS[0]) : (y.color || '')); return v.every(c => c === v[0]) ? v[0] : null; })(); L.push(E('color', ts.every(y => y.t === 'd') ? T('لون المجلد', 'Folder colour') : T('تلوين', 'Colour'), 'palette', { sub: MSA.multi.colorSub(cur, 'col') })); }
     L.push(E('fav', ts.every(y => y.fav) ? T('إزالة من المفضلة', 'Remove from favourites') : T('إضافة للمفضلة', 'Add to favourites'), 'star'));
     if (!sel.has(x.id)) L.push(E('select', T('تحديد', 'Select'), 'check'));
     if (one) L.push(E('props', T('خصائص', 'Properties'), 'info', { key: 'Alt+Enter' }));
@@ -274,6 +276,7 @@ async function runAct(a, x, host){
   else if (a === 'ren') { if (x.t === 'd') folderDialog(x, x.parent, re); else { const n = await askName(T('الاسم الجديد', 'New name'), x.name); if (n) { F.rename(x.id, n); re(); } } }
   else if (a === 'fav') { const on = !ts.every(y => y.fav); ts.forEach(y => { y.fav = on; }); redo(); }
   else if (a === 'select') { sel.add(x.id); render(host); }
+  else if (a.indexOf('col:') === 0) { const v = a.slice(4); ts.forEach(y => { if (y.t === 'd') y.color = v || COLORS[0]; else if (v) y.color = v; else delete y.color; y.updated = Date.now(); }); redo(); }
   else if (a === 'props') propsDialog(x);
   else if (a === 'del') { if (await del(ts.map(y => y.id))) re(); }
   else if (a === 'newf') folderDialog(null, u.cur, re);
@@ -313,6 +316,8 @@ function wire(host, list){
     else if (a === 'fav' && x) { x.fav = !x.fav; x.updated = x.updated; redo(); }
     else if (a === 'more' && x) { const r = b.getBoundingClientRect(); itemMenu(x, { x: r.left, y: r.bottom }, host); }
     else if (a === 'bclr') { sel.clear(); render(host); }
+    else if (a === 'ball') { shown().forEach(y => sel.add(y.id)); render(host); }
+    else if (a === 'bcol') { const r = b.getBoundingClientRect(), ts = [...sel].map(byId).filter(Boolean); showCtx({ x: r.left, y: r.bottom }, MSA.multi.colorSub(null, 'col'), id => { const v = id.slice(4); ts.forEach(y => { if (y.t === 'd') y.color = v || COLORS[0]; else if (v) y.color = v; else delete y.color; y.updated = Date.now(); }); redo(); }); }
     else if (a === 'bfav') { const all = [...sel].map(byId).filter(Boolean), on = !all.every(y => y.fav); all.forEach(y => { y.fav = on; }); redo(); }
     else if (a === 'bdl') download([...sel]);
     else if (a === 'bmove') pickFolder(T('نقل ' + sel.size + ' عنصر إلى', 'Move ' + sel.size + ' item(s) to'), [...sel].filter(id => (byId(id) || {}).t === 'd'), undefined, p => { const n = F.move([...sel], p); sel.clear(); MSA.toast(T('اتنقل ' + n + ' عنصر', n + ' moved'), 'ok'); MSA.rerender(true); });

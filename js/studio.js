@@ -140,8 +140,8 @@ function tTime(p, box){
     };
     $('#tmNote', box).onchange = e => { if (tm.run) { tm.run.note = e.target.value.trim(); sv(); } };
     $('[data-a=addmin]', box).onclick = () => { const m = Math.round(num($('#tmMin', box).value)); if (m < 1) { $('#tmMin', box).focus(); return; } tm.entries.push({ id: U.uid('e'), date: today(), min: m, note: $('#tmMNote', box).value.trim() }); sv(); draw(); };
-    $$('[data-del]', box).forEach(b => b.onclick = () => { tm.entries = tm.entries.filter(x => x.id !== b.dataset.del); sv(); draw(); });
-    $$('[data-xdel]', box).forEach(b => b.onclick = () => { tm.extras = tm.extras.filter(x => x.id !== b.dataset.xdel); sv(); draw(); });
+    $$('[data-del]', box).forEach(b => b.onclick = async () => { if (!await MSA.confirmDel(T('حذف هذا السجل؟', 'Delete this entry?'))) return; tm.entries = tm.entries.filter(x => x.id !== b.dataset.del); sv(); draw(); });
+    $$('[data-xdel]', box).forEach(b => b.onclick = async () => { if (!await MSA.confirmDel(T('حذف هذا البند؟', 'Delete this item?'))) return; tm.extras = tm.extras.filter(x => x.id !== b.dataset.xdel); sv(); draw(); });
     $('[data-a=addex]', box).onclick = () => { const n = $('#exName', box).value.trim(), a = num($('#exAmt', box).value); if (!n || !a) return; tm.extras.push({ id: U.uid('x'), name: n, amt: a }); sv(); draw(); };
     const fxLine = () => {
       const el = $('#prFx', box); if (!el) return; const R = MSA.rates;
@@ -244,7 +244,7 @@ function tPosts(p, box){
           a.close(); sv(); } }] });
     };
     $$('[data-st]', box).forEach(b => b.onclick = () => { const x = list.find(y => y.id === b.dataset.st); x.status = STAT[(STAT.indexOf(x.status) + 1) % 3]; sv(); });
-    $$('[data-del]', box).forEach(b => b.onclick = () => { const i = list.findIndex(y => y.id === b.dataset.del); list.splice(i, 1); sv(); });
+    $$('[data-del]', box).forEach(b => b.onclick = async () => { if (!await MSA.confirmDel()) return; const i = list.findIndex(y => y.id === b.dataset.del); list.splice(i, 1); sv(); });
     $$('[data-tk]', box).forEach(b => b.onclick = () => {
       const x = list.find(y => y.id === b.dataset.tk), when = x.date + 'T' + (x.time || '09:00');
       S().tasks.unshift({ id: U.uid('t'), type: 'task', title: T('نشر: ', 'Publish: ') + x.title + ' (' + x.platform + ')', desc: p.name, status: 'todo', priority: 'normal', start: '', due: when, remind: '60', remindAt: '', repeat: '', tags: [], checklist: [], atts: [], color: '', pinned: false, created: Date.now(), updated: Date.now(), notified: false });
@@ -323,7 +323,7 @@ function tDelivery(p, box){
   };
   const wire = () => {
     $$('[data-ck]', box).forEach(c => c.onchange = () => { d.items.find(x => x.id === c.dataset.ck).done = c.checked; MSA.save(); draw(); MSA.studio.refreshTabs && MSA.studio.refreshTabs(); });
-    $$('[data-dd]', box).forEach(b => b.onclick = () => { d.items = d.items.filter(x => x.id !== b.dataset.dd); MSA.save(); draw(); });
+    $$('[data-dd]', box).forEach(b => b.onclick = async () => { if (!await MSA.confirmDel()) return; d.items = d.items.filter(x => x.id !== b.dataset.dd); MSA.save(); draw(); });
     $('[data-a=add]', box).onclick = () => { const v = $('#dkNew', box).value.trim(); if (!v) return; d.items.push({ id: U.uid('d'), text: v, done: false }); MSA.save(); draw(); };
     $('#dkNew', box).onkeydown = e => { if (e.key === 'Enter') $('[data-a=add]', box).click(); };
     const pb = $('[data-a=pres]', box); if (pb) pb.onclick = async () => {
@@ -396,7 +396,7 @@ function lTrends(box){
     (notes.length ? '<div style="margin-top:10px">' + notes.map(n => '<div class="chk"><span class="tag">' + esc(NTAGS.find(x => x[1] === n.tag) ? T(NTAGS.find(x => x[1] === n.tag)[0], n.tag) : n.tag) + '</span><span class="grow" dir="auto">' + esc(n.text) + '</span><span class="hint">' + esc(n.date) + '</span><button class="icon-btn sm danger" data-d="' + n.id + '">' + I('x', 'sm') + '</button></div>').join('') + '</div>' : '') + '</div>';
   const add = () => { const v = $('#tnText', box).value.trim(); if (!v) return; notes.unshift({ id: U.uid('n'), tag: $('#tnTag', box).value, text: v, date: today() }); MSA.save(); lTrends(box); };
   $('[data-a=add]', box).onclick = add; $('#tnText', box).onkeydown = e => { if (e.key === 'Enter') add(); };
-  $$('[data-d]', box).forEach(b => b.onclick = () => { S().trendNotes = notes.filter(n => n.id !== b.dataset.d); MSA.save(); lTrends(box); });
+  $$('[data-d]', box).forEach(b => b.onclick = async () => { if (!await MSA.confirmDel()) return; S().trendNotes = notes.filter(n => n.id !== b.dataset.d); MSA.save(); lTrends(box); });
 }
 
 /* ---------- learning plan ---------- */
@@ -416,7 +416,7 @@ function lPlan(box){
   $('[data-a=add]', box).onclick = () => add($('#lpT', box).value.trim(), $('#lpD', box).value); $('#lpT', box).onkeydown = e => { if (e.key === 'Enter') $('[data-a=add]', box).click(); };
   $$('[data-idea]', box).forEach(b => b.onclick = () => add(T(IDEAS[b.dataset.idea][0], IDEAS[b.dataset.idea][1]), $('#lpD', box).value));
   $$('[data-ck]', box).forEach(c => c.onchange = () => { plan.find(x => x.id === c.dataset.ck).done = c.checked; MSA.save(); lPlan(box); });
-  $$('[data-d]', box).forEach(b => b.onclick = () => { S().learnPlan = plan.filter(x => x.id !== b.dataset.d); MSA.save(); lPlan(box); });
+  $$('[data-d]', box).forEach(b => b.onclick = async () => { if (!await MSA.confirmDel()) return; S().learnPlan = plan.filter(x => x.id !== b.dataset.d); MSA.save(); lPlan(box); });
   $$('[data-yt]', box).forEach(b => b.onclick = () => MSA.openLink('https://www.youtube.com/results?search_query=' + encodeURIComponent(plan.find(x => x.id === b.dataset.yt).title + ' tutorial')));
 }
 })();

@@ -22,7 +22,7 @@ const ST = () => { const u = MSA.state.ui; u.rep = u.rep || { range: 6, open: {}
 /* ---------------------------------------------------------------- data */
 function collect(){
   const s = MSA.state, R = ST(), now = new Date();
-  const projects = s.projects || [], tasks = (s.tasks || []).filter(x => x.type === 'task');
+  const projects = s.projects || [], tasks = (s.tasks || []).filter(x => x.type === 'task' && !x.routine);
   const months = [];
   const n = R.range === 0 ? 12 : R.range;
   for (let i = n - 1; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ y: d.getFullYear(), m: d.getMonth(), key: d.getFullYear() + '-' + d.getMonth(), done: 0, money: 0, mins: 0, tasks: 0 }); }

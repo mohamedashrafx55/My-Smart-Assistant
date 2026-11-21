@@ -64,7 +64,7 @@ async def main():
         ok('existing step images auto-placed', len(it0) >= 1)
         await pg.screenshot(path='/tmp/s_bd1.png')
         # clear board for deterministic tests
-        await pg.keyboard.press('Control+a'); await pg.keyboard.press('Delete'); await pg.wait_for_timeout(300)
+        await pg.keyboard.press('Control+a'); await pg.keyboard.press('Delete'); await pg.wait_for_timeout(250); await pg.evaluate(CONFJS); await pg.wait_for_timeout(300)
         ok('ctrl+A + Delete empties board', len(await items(pg)) == 0)
         ok('empty state shown', await pg.locator('#bdEmpty:not([hidden])').count() == 1)
         # drop 4 files
@@ -152,12 +152,12 @@ async def main():
         await pg.keyboard.press('Control+a'); await pg.keyboard.press('Control+d'); await pg.wait_for_timeout(250)
         ok('Ctrl+D duplicates selection', len(await items(pg)) == 8)
         ok('duplicates share the same attachments', n_atts == await pg.evaluate("(()=>{const p=MSA.state.projects.find(p=>p.status!=='done');let s=null;MSA.proj.walk(p.steps,x=>{if(!s&&x.key==='mood')s=x});return s.atts.filter(a=>a.kind==='image').length})()"))
-        await pg.keyboard.press('Delete'); await pg.wait_for_timeout(250)
+        await pg.keyboard.press('Delete'); await pg.wait_for_timeout(250); await pg.evaluate(CONFJS); await pg.wait_for_timeout(250)
         ok('delete removes the 4 duplicates', len(await items(pg)) == 4)
         ok('their pictures are still kept (originals remain)', True)
         # delete one original → attachment goes to trash, undo brings it back
         tr0 = await pg.evaluate("(()=>{const p=MSA.state.projects.find(p=>p.status!=='done');let s=null;MSA.proj.walk(p.steps,x=>{if(!s&&x.key==='mood')s=x});return s.board.trash.length})()")
-        first = (await rects(pg))[0]; await pg.mouse.click(first['x']+first['w']/2, first['y']+first['h']/2); await pg.keyboard.press('Delete'); await pg.wait_for_timeout(250)
+        first = (await rects(pg))[0]; await pg.mouse.click(first['x']+first['w']/2, first['y']+first['h']/2); await pg.keyboard.press('Delete'); await pg.wait_for_timeout(250); await pg.evaluate(CONFJS); await pg.wait_for_timeout(250)
         tr = await pg.evaluate("(()=>{const p=MSA.state.projects.find(p=>p.status!=='done');let s=null;MSA.proj.walk(p.steps,x=>{if(!s&&x.key==='mood')s=x});return s.board.trash.length})()")
         ok('deleted picture goes to trash (undo-able)', tr == tr0 + 1, (tr0, tr))
         await pg.keyboard.press('Control+z'); await pg.wait_for_timeout(250)

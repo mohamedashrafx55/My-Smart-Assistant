@@ -49,12 +49,19 @@ function render(host){
   else if (cur || flat) html += '<div class="cards">' + (cur ? cur.ps : list).map(cardHTML).join('') + '</div>';
   else html += '<div class="folders">' + fl.map(f => {
     const imgs = f.ps.map(firstImage).filter(Boolean).slice(0, 3), last = Math.max(...f.ps.map(p => p.completedAt || 0)), h = f.key === NONE ? 220 : hue(f.key);
-    return '<button class="folder" data-act="ofolder" data-k="' + U.esc(f.key) + '" style="--fh:' + h + '"><span class="fo-tab"></span><span class="fo-body"><span class="fo-thumbs">' + (imgs.length ? imgs.map(a => '<i data-cover="' + a.id + '"></i>').join('') : '<span class="fo-ic">' + I('folder', 'lg') + '</span>') + '</span>' +
+    return '<button class="folder" data-act="ofolder" data-k="' + U.esc(f.key) + '" style="--fh:' + h + (((MSA.state.clientColors || {})[f.key]) ? ';--fc:' + U.esc(MSA.state.clientColors[f.key]) : '') + '"><span class="fo-tab"></span><span class="fo-body"><span class="fo-thumbs">' + (imgs.length ? imgs.map(a => '<i data-cover="' + a.id + '"></i>').join('') : '<span class="fo-ic">' + I('folder', 'lg') + '</span>') + '</span>' +
       '<span class="fo-name" dir="auto">' + U.esc(f.name || T2('بدون عميل', 'No client')) + '</span><span class="fo-meta">' + f.ps.length + ' ' + U.esc(T2('مشروع', 'project(s)')) + ' · ' + U.esc(MSA.fmtDate(last)) + '</span></span></button>';
   }).join('') + '</div>';
   host.innerHTML = html;
   hydrateCovers(host);
   P.wireMulti(host, 'done');
+  if (!host._cfc) { host._cfc = 1; host.addEventListener('contextmenu', e => {   /* right-click a client folder: open / colour */
+    const b = e.target.closest('.folder[data-k]'); if (!b || !MSA.menu) return; e.preventDefault(); e.stopPropagation(); const k = b.dataset.k, cc = MSA.state.clientColors || {};
+    MSA.menu.show({ x: e.clientX, y: e.clientY }, [{ id: 'open', label: MSA.T('فتح', 'Open'), icon: 'folder-open' }, { id: 'color', label: MSA.T('لون الفولدر', 'Folder colour'), icon: 'palette', sub: MSA.multi.colorSub(cc[k] || '', 'col') }], id => {
+      if (id === 'open') b.click();
+      else if (id.indexOf('col:') === 0) { const v = id.slice(4); MSA.state.clientColors = MSA.state.clientColors || {}; if (v) MSA.state.clientColors[k] = v; else delete MSA.state.clientColors[k]; MSA.save(); MSA.rerender(false); }
+    });
+  }, true); }
   const go = fn => el => { fn(el); MSA.save(); MSA.rerender(false); const v = $('#view'); if (v) v.scrollTop = 0; };
   MSA.on(host, {
     open: el => { MSA.state.ui.doneOpen = el.dataset.id; MSA.save(); MSA.rerender(false); $('#view').scrollTop = 0; },

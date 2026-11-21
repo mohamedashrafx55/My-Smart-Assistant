@@ -114,7 +114,7 @@ function render(host){
     '<div class="cs-wrap" id="csWrap"><table class="cs-tbl" style="width:' + W + 'px"><colgroup><col style="width:44px">' + d.cols.map(c => '<col style="width:' + c.w + 'px">').join('') + '<col style="width:110px"><col style="width:110px"><col style="width:110px"><col style="width:78px"></colgroup>' +
       '<thead><tr><th class="cs-n">#</th>' + d.cols.map(c => '<th class="' + (c.id === 'name' ? 'cs-sticky' : '') + '" data-col="' + c.id + '"><button class="cs-h" data-ca="sort" data-v="' + c.id + '"><span dir="auto">' + esc(c.name) + sortIcon(c) + '</span></button><button class="cs-m" data-ca="colmenu" data-v="' + c.id + '" aria-label="menu">' + I('more', 'xs') + '</button><i class="cs-rs" data-rs="' + c.id + '"></i></th>').join('') +
       '<th class="cs-calc">' + esc(T('المشاريع', 'Projects')) + '</th><th class="cs-calc">' + esc(T('المكتملة', 'Completed')) + '</th><th class="cs-calc">' + esc(T('القيمة (جنيه)', 'Value (EGP)')) + '</th><th></th></tr></thead><tbody>' +
-      rows.map((r, i) => { const cp = computed(r.c.name); return '<tr data-row="' + r.id + '"><td class="cs-n">' + (i + 1) + '</td>' + d.cols.map(c => cellHTML(r, c)).join('') +
+      rows.map((r, i) => { const cp = computed(r.c.name); const mcx = MSA.multi.mc(r, true); return '<tr' + (mcx.cls ? ' class="' + mcx.cls.trim() + '"' : '') + mcx.sty + ' data-row="' + r.id + '"><td class="cs-n">' + (i + 1) + '</td>' + d.cols.map(c => cellHTML(r, c)).join('') +
         '<td class="cs-calc">' + (cp.n ? '<button class="cs-link" data-ca="folder" data-v="' + esc(r.c.name) + '">' + cp.n + '</button>' : '<span class="muted">0</span>') + '</td><td class="cs-calc">' + cp.done + '</td><td class="cs-calc" dir="ltr">' + (cp.val ? money(cp.val) : '—') + '</td>' +
         '<td class="cs-x"><button class="icon-btn sm" data-ca="msg" data-v="' + r.id + '" title="' + esc(T('رسائل جاهزة', 'Ready messages')) + '" aria-label="messages">' + I('mail', 'xs') + '</button><button class="icon-btn sm danger" data-ca="delrow" data-v="' + r.id + '" aria-label="delete">' + I('trash', 'xs') + '</button></td></tr>'; }).join('') + '</tbody></table>' +
       (rows.length ? '' : '<div class="cs-empty">' + I('user') + '<div>' + esc(d.rows.length ? T('لا نتائج مطابقة', 'No matching clients') : T('الشيت فاضي — ابدأ بإضافة أول عميل', 'The sheet is empty — add your first client')) + '</div></div>') + '</div>' +
@@ -179,6 +179,13 @@ function wire(host){
     else if (a === 'imp') importCsv(redo);
     else if (a === 'pdf') exportPdf();
   });
+  MSA.multi.simple(host, { key: 'clients', item: 'tr[data-row]', get: rowOf, btnHost: '.cs-bar', name: r => r.c.name || '', refresh: () => { MSA.save(); redo(); },
+    extra: [
+      { id: 'msg', label: T('رسائل جاهزة', 'Ready messages'), icon: 'mail', single: true, run: l => { const b = $('[data-ca=msg][data-v="' + l[0].id + '"]', host); b && b.click(); } },
+      { id: 'proj', label: T('مشاريعه', 'Projects'), icon: 'folder', single: true, when: l => computed(l[0].c.name).n > 0, run: l => { const b = $('[data-ca=folder][data-v="' + l[0].c.name + '"]', host); b && b.click(); } },
+      { id: 'copyc', label: T('نسخ البيانات', 'Copy details'), icon: 'copy', run: async l => { try { await navigator.clipboard.writeText(l.map(r => d.cols.map(c => r.c[c.id] || '').join('\t')).join('\n')); MSA.toast(T('تم النسخ', 'Copied'), 'ok'); } catch (x) { MSA.toast(T('تعذر النسخ', 'Could not copy'), 'err'); } } }
+    ],
+    del: async l => { const ids = new Set(l.map(r => r.id)); l.forEach(r => { if (r.ident && r.ident.logos) MSA.files.delMany(r.ident.logos); }); d.rows = d.rows.filter(r => !ids.has(r.id)); } });
 }
 
 /* ---------- columns ---------- */

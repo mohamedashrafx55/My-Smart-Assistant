@@ -53,7 +53,7 @@ function buildNav(){
 MSA.updateCounts = function(){
   const s = S(), P = MSA.proj, c = {
     active: P.activeList().length, done: P.doneList().length, learn: s.learning.videos.length,
-    tasks: s.tasks.filter(x => x.type === 'task' && x.status !== 'done').length
+    tasks: s.tasks.filter(x => x.type === 'task' && !x.routine && x.status !== 'done').length
   };
   $$('[data-count]').forEach(el => { const n = c[el.dataset.count] || 0; el.textContent = n; el.hidden = !n; });
 };

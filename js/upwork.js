@@ -107,7 +107,7 @@ function propsTab(el){
   const all = u.props, list = all.filter(p => (!ui.f || p.status === ui.f) && (!q || (p.title + ' ' + p.client + ' ' + p.text).toLowerCase().includes(q)));
   el.innerHTML = '<div class="row" style="gap:8px;margin-bottom:10px"><div class="cs-search grow">' + I('search', 'sm') + '<input type="search" id="uwQ" dir="auto" placeholder="' + esc(T('ابحث في العروض…', 'Search proposals…')) + '" value="' + esc(ui.q || '') + '"></div><button class="btn primary" data-up="new">' + I('plus', 'sm') + '<span>' + esc(T('عرض جديد', 'New proposal')) + '</span></button></div>' +
     '<div class="pchips" style="margin:0 0 12px"><button class="pchip' + (ui.f ? '' : ' on') + '" data-up="f" data-v="">' + esc(T('الكل', 'All')) + ' · ' + all.length + '</button>' + Object.keys(ST).map(k => '<button class="pchip' + (ui.f === k ? ' on' : '') + '" data-up="f" data-v="' + k + '">' + esc(ST[k][0]) + ' · ' + all.filter(p => p.status === k).length + '</button>').join('') + '</div>' +
-    (list.length ? '<div class="uw-list">' + list.map(p => { const pr = p.projectId && S().projects.find(x => x.id === p.projectId); return '<div class="uw-row" data-id="' + p.id + '"><div class="uw-m"><b dir="auto">' + esc(p.title || '—') + '</b><span class="pill-s" style="background:' + ST[p.status][1] + '">' + esc(ST[p.status][0]) + '</span></div>' +
+    (list.length ? '<div class="uw-list">' + list.map(p => { const pr = p.projectId && S().projects.find(x => x.id === p.projectId); const mcx = MSA.multi.mc(p, true); return '<div class="uw-row' + mcx.cls + '"' + mcx.sty + ' data-id="' + p.id + '"><div class="uw-m"><b dir="auto">' + esc(p.title || '—') + '</b><span class="pill-s" style="background:' + ST[p.status][1] + '">' + esc(ST[p.status][0]) + '</span></div>' +
       '<div class="uw-n"><span dir="auto">' + esc(p.client || '—') + '</span><span dir="ltr">' + esc(p.date) + '</span>' + (p.connects ? '<span>' + p.connects + ' connects</span>' : '') + (p.rate ? '<span dir="ltr">$' + p.rate + '</span>' : '') + (pr ? '<span>' + I('link', 'xs') + esc(pr.name) + '</span>' : '') + '</div>' +
       '<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px"><select data-up="st" aria-label="status">' + Object.keys(ST).map(k => '<option value="' + k + '"' + (p.status === k ? ' selected' : '') + '>' + esc(ST[k][0]) + '</option>').join('') + '</select><button class="btn sm" data-up="edit">' + I('pencil', 'sm') + esc(T('تعديل', 'Edit')) + '</button><button class="btn sm" data-up="word">' + I('download', 'sm') + 'Word</button><button class="btn sm" data-up="copy">' + I('copy', 'sm') + esc(T('نسخ النص', 'Copy')) + '</button>' + (p.url ? '<button class="btn sm" data-up="open">' + I('external', 'sm') + esc(T('الوظيفة', 'Job')) + '</button>' : '') + '<span class="grow"></span><button class="icon-btn sm danger" data-up="del" aria-label="delete">' + I('trash', 'sm') + '</button></div></div>'; }).join('') + '</div>'
       : MSA.empty('briefcase', all.length ? T('لا نتائج مطابقة', 'No matches') : T('لسه مفيش عروض', 'No proposals yet'), all.length ? '' : T('اضغط «عرض جديد» وسجّل أول Proposal. خلّي القالب في تبويب «قالب Word».', 'Tap “New proposal” and log your first one. Keep your template in the “Word template” tab.')));
@@ -125,6 +125,15 @@ function propsTab(el){
     else if (a === 'open') MSA.openLink(p.url);
     else if (a === 'del') { if (await MSA.confirm(T('حذف هذا العرض؟', 'Delete this proposal?'), { danger: true })) { u.props = u.props.filter(x => x !== p); redo(); } }
   };
+  MSA.multi.simple(el, { key: 'upwork', item: '.uw-row', get: id => u.props.find(x => x.id === id), btnHost: '.row', name: x => x.title || '', refresh: redo,
+    extra: [
+      { id: 'edit', label: T('تعديل', 'Edit'), icon: 'pencil', single: true, run: l => UW.edit(l[0], () => MSA.rerender(true)) },
+      { id: 'copy', label: T('نسخ النص', 'Copy'), icon: 'copy', single: true, run: async l => { const p = l[0], t = p.text || plain(fill(u.tpl.html, p)); try { await navigator.clipboard.writeText(t); MSA.toast(T('تم النسخ', 'Copied'), 'ok'); } catch (x) { MSA.toast(T('تعذر النسخ', 'Could not copy'), 'err'); } } },
+      { id: 'word', label: 'Word', icon: 'download', single: true, run: l => UW.word(l[0]) },
+      { id: 'open', label: T('فتح الوظيفة', 'Open job'), icon: 'external', single: true, when: l => !!l[0].url, run: l => MSA.openLink(l[0].url) },
+      { id: 'st', label: T('الحالة', 'Status'), icon: 'flag', sub: () => Object.keys(ST).map(k => ({ id: 'st:' + k, label: ST[k][0], dot: ST[k][1] })), run: (l, k) => { l.forEach(p => { p.status = k; if (k === 'hired' && p.client) { const r = MSA.clients.ensure(p.client); if (r && !/upwork/i.test(r.c.source || '')) r.c.source = 'Upwork'; } }); redo(); } }
+    ],
+    del: async l => { const ids = new Set(l.map(x => x.id)); u.props = u.props.filter(x => !ids.has(x.id)); } });
 }
 function clientsTab(el){
   const list = UW.clients();

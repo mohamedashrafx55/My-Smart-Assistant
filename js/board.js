@@ -210,6 +210,7 @@ function open(proj, step){
     const done = () => { t.removeEventListener('blur', done); t.contentEditable = 'false'; e.classList.remove('editing'); const v = t.innerText.replace(/\n$/, ''); if (!v.trim()) { pushHist(); remove([it.id]); return; } if (v !== it.txt) { pushHist(); it.txt = v; } it.h = Math.max(it.fs * 1.4, t.scrollHeight); commit(); };
     t.addEventListener('blur', done); t.addEventListener('keydown', ev => { if (ev.key === 'Escape') { ev.stopPropagation(); t.blur(); } });
   }
+  async function removeAsk(ids){ if (!ids.length) return; if (!await MSA.confirmDel(T(ids.length > 1 ? 'حذف ' + ids.length + ' عناصر من اللوح؟ (تقدر تتراجع بـ Ctrl+Z)' : 'حذف العنصر من اللوح؟ (تقدر تتراجع بـ Ctrl+Z)', ids.length > 1 ? 'Delete ' + ids.length + ' items from the board? (Ctrl+Z undoes)' : 'Delete this item from the board? (Ctrl+Z undoes)'))) return; remove(ids); }
   function remove(ids){
     if (!ids.length) return; pushHist();
     items = B.items = items.filter(i => !ids.includes(i.id)); ids.forEach(id => { const e = els.get(id); if (e) e.remove(); els.delete(id); sel.delete(id); });
@@ -465,7 +466,7 @@ function open(proj, step){
       if (one && s[0].t === 'img') L.push({ icon: 'scissors', label: T('قص', 'Crop') + '  C', onClick: startCrop }, { icon: 'undo', label: T('إلغاء القص', 'Reset crop'), onClick: resetCrop });
       L.push({ icon: 'maximize', label: T('الحجم الأصلي', 'Original size') + '  Ctrl+1', onClick: resetSize }, { icon: 'undo', label: T('تصفير الدوران', 'Reset rotation'), onClick: resetRot }, '-',
         { icon: 'chev-u', label: T('للأمام', 'Bring to front') + '  PgUp', onClick: () => zorder(true) }, { icon: 'chev-d', label: T('للخلف', 'Send to back') + '  PgDn', onClick: () => zorder(false) },
-        { icon: 'grid', label: T('ترتيب…', 'Arrange…'), onClick: () => arrangeMenu(x, y) }, '-', { icon: 'trash', label: T('حذف', 'Delete') + '  Del', danger: true, onClick: () => remove([...sel]) });
+        { icon: 'grid', label: T('ترتيب…', 'Arrange…'), onClick: () => arrangeMenu(x, y) }, '-', { icon: 'trash', label: T('حذف', 'Delete') + '  Del', danger: true, onClick: () => removeAsk([...sel]) });
     } else {
       L.push({ icon: 'paste', label: T('لصق', 'Paste') + '  Ctrl+V', onClick: async () => { if (!pasteInternal()) { try { const cl = await navigator.clipboard.read(); const fs = []; for (const ci of cl) for (const ty of ci.types) if (/^image\//.test(ty)) fs.push(new File([await ci.getType(ty)], 'pasted.png', { type: ty })); if (fs.length) addFiles(fs, toWorld(x, y)); else MSA.toast(T('مفيش صورة في الحافظة — استخدم Ctrl+V', 'No image on the clipboard — use Ctrl+V'), 'err'); } catch (er) { MSA.toast(T('استخدم Ctrl+V للصق', 'Use Ctrl+V to paste'), 'err'); } } } },
         { icon: 'image', label: T('إضافة صور…', 'Add images…'), onClick: () => cmd('add') }, { icon: 'heading', label: T('إضافة نص', 'Add text'), onClick: () => addText(toWorld(x, y)) }, '-',
@@ -494,7 +495,7 @@ function open(proj, step){
       case 'arrange': return arrangeMenu(r.left, r.bottom + 4);
       case 'flipH': return flip('fx'); case 'flipV': return flip('fy'); case 'gray': return toGray();
       case 'crop': return cropId ? endCrop() : startCrop();
-      case 'lock': return lockToggle(); case 'dup': return dupSel(); case 'del': return remove([...sel]);
+      case 'lock': return lockToggle(); case 'dup': return dupSel(); case 'del': return removeAsk([...sel]);
       case 'undo': return doUndo(); case 'redo': return doRedo();
       case 'fit': return fitTo(sels().length ? sels() : items, 1.5);
       case 'bg': return bgMenu(r.left, r.bottom + 4); case 'export': return exportMenu(r.left, r.bottom + 4); case 'help': return help();
@@ -517,7 +518,7 @@ function open(proj, step){
     if (mod && k === 'd') { e.preventDefault(); dupSel(); return; }
     if (mod && k === '1') { e.preventDefault(); const r = hostRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / view.k); return; }
     if (mod) return;
-    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); remove([...sel]); return; }
+    if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeAsk([...sel]); return; }
     if (st && k === 'h') { e.preventDefault(); flip('fx'); return; } if (st && k === 'v') { e.preventDefault(); flip('fy'); return; }
     if (!st && k === 'g') { toGray(); return; } if (k === 'c' && !st) { cropId ? endCrop() : startCrop(); return; } if (k === 'l') { lockToggle(); return; } if (k === 'f') { fitTo(sels().length ? sels() : items, 1.5); return; } if (k === 't' && !st) { e.preventDefault(); addText(); return; }
     if (e.key === 'PageUp') { e.preventDefault(); zorder(true); return; } if (e.key === 'PageDown') { e.preventDefault(); zorder(false); return; }

@@ -303,7 +303,7 @@ function musicHTML(){
   const chips = '<div class="tabs-scroll stab"><button class="ttab ' + (!curList ? 'on' : '') + '" data-md="list" data-id="">' + I('music', 'sm') + esc(T('كل الأغاني', 'All tracks')) + '<span class="cnt">' + m.tracks.length + '</span></button>' +
     m.lists.map(x => '<button class="ttab ' + (curList === x.id ? 'on' : '') + '" data-md="list" data-id="' + x.id + '">' + esc(x.name) + '<span class="cnt">' + x.ids.filter(i => tr(i)).length + '</span></button>').join('') +
     '<button class="ttab" data-md="newlist">' + I('plus', 'sm') + esc(T('قائمة', 'List')) + '</button></div>';
-  const rows = ids.map(id => { const t = tr(id), on = id === curId; return '<div class="trk' + (on ? ' on' : '') + '" data-id="' + id + '"><button class="trk-p" data-md="play" data-id="' + id + '" aria-label="play">' + I(on && !aud.paused ? 'pause' : 'play', 'sm') + '</button>' +
+  const rows = ids.map(id => { const t = tr(id), on = id === curId; const mcx = MSA.multi.mc(t, true); return '<div class="trk' + (on ? ' on' : '') + mcx.cls + '"' + mcx.sty + ' data-id="' + id + '"><button class="trk-p" data-md="play" data-id="' + id + '" aria-label="play">' + I(on && !aud.paused ? 'pause' : 'play', 'sm') + '</button>' +
     '<button class="trk-n" data-md="play" data-id="' + id + '" dir="auto">' + esc(t.name) + '</button><span class="hint" dir="ltr">' + (t.dur ? fmt(t.dur) : '') + '</span><button class="icon-btn sm" data-md="menu" data-id="' + id + '" aria-label="more">' + I('more', 'sm') + '</button></div>'; }).join('');
   return '<div id="npBox">' + nowHTML() + '</div>' + chips +
     '<div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0"><button class="btn primary" data-md="add">' + I('plus', 'sm') + esc(T('إضافة موسيقى', 'Add music')) + '</button>' +
@@ -331,8 +331,8 @@ async function playVideo(v){
 function videoHTML(){
   const vs = M().videos;
   return '<div class="row" style="gap:8px;flex-wrap:wrap;margin:10px 0"><button class="btn primary" data-md="vlink">' + I('link', 'sm') + esc(T('إضافة رابط فيديو', 'Add video link')) + '</button><button class="btn" data-md="vfile">' + I('video', 'sm') + esc(T('إضافة ملف فيديو', 'Add video file')) + '</button></div>' +
-    (vs.length ? '<div class="vgrid">' + vs.map(v => '<div class="vc" data-id="' + v.id + '"><button class="vc-t" data-md="vplay" data-id="' + v.id + '" aria-label="play">' + (v.thumb ? '<img src="' + esc(v.thumb) + '" referrerpolicy="no-referrer" loading="lazy" alt="" onerror="this.remove()">' : '') + '<span class="vc-i">' + I('video') + '</span><span class="vc-pl">' + I('play') + '</span></button>' +
-      '<div class="vc-n" dir="auto">' + esc(v.title || '') + '</div><div class="vc-a"><button class="icon-btn sm" data-md="vren" data-id="' + v.id + '" aria-label="rename">' + I('pencil', 'sm') + '</button><button class="icon-btn sm" data-md="vdel" data-id="' + v.id + '" aria-label="delete">' + I('trash', 'sm') + '</button></div></div>').join('') + '</div>'
+    (vs.length ? '<div class="vgrid">' + vs.map(v => { const mcx = MSA.multi.mc(v, true); return '<div class="vc' + mcx.cls + '"' + mcx.sty + ' data-id="' + v.id + '"><button class="vc-t" data-md="vplay" data-id="' + v.id + '" aria-label="play">' + (v.thumb ? '<img src="' + esc(v.thumb) + '" referrerpolicy="no-referrer" loading="lazy" alt="" onerror="this.remove()">' : '') + '<span class="vc-i">' + I('video') + '</span><span class="vc-pl">' + I('play') + '</span></button>' +
+      '<div class="vc-n" dir="auto">' + esc(v.title || '') + '</div><div class="vc-a"><button class="icon-btn sm" data-md="vren" data-id="' + v.id + '" aria-label="rename">' + I('pencil', 'sm') + '</button><button class="icon-btn sm" data-md="vdel" data-id="' + v.id + '" aria-label="delete">' + I('trash', 'sm') + '</button></div></div>'; }).join('') + '</div>'
       : MSA.empty('video', T('مفيش فيديوهات لسه', 'No videos yet'), T('أضف رابط يوتيوب أو فيميو أو ملف فيديو وشغّله جوه التطبيق', 'Add a YouTube / Vimeo link or a video file and play it inside the app')));
 }
 let host = null;
@@ -343,6 +343,24 @@ function draw(h){
     '<div class="tabs-scroll stab"><button class="ttab ' + (tab === 'music' ? 'on' : '') + '" data-md="tab" data-id="music">' + I('music', 'sm') + esc(T('الموسيقى', 'Music')) + '<span class="cnt">' + m.tracks.length + '</span></button>' +
     '<button class="ttab ' + (tab === 'video' ? 'on' : '') + '" data-md="tab" data-id="video">' + I('video', 'sm') + esc(T('الفيديو', 'Video')) + '<span class="cnt">' + m.videos.length + '</span></button></div>' +
     (tab === 'music' ? musicHTML() : videoHTML()) + '</div>';
+  selWire(h);
+}
+function selWire(h){
+  const m = M(), redo = () => { MSA.save(); redraw(); };
+  if (tab === 'music') MSA.multi.simple(h, { key: 'media-music', item: '.trk', ctlSelect: true, get: id => tr(id), btnHost: '.mediav .row', name: t => t.name, refresh: redo, bgMenu: false,
+    extra: [
+      { id: 'play', label: T('تشغيل', 'Play'), icon: 'play', single: true, run: l => play(l[0].id, curList || null) },
+      { id: 'ren', label: T('تغيير الاسم', 'Rename'), icon: 'pencil', single: true, run: async l => { const v = await MSA.ask({ title: T('اسم الأغنية', 'Track name'), value: l[0].name }); if (v) { l[0].name = v; paintMini(); redo(); } } },
+      { id: 'pl', label: T('إضافة إلى قائمة', 'Add to list'), icon: 'folder-plus', sub: () => m.lists.map(x => ({ id: 'pl:' + x.id, label: x.name, icon: 'plus' })).concat(m.lists.length ? [] : [{ id: 'pl:', label: T('مفيش قوائم', 'No lists'), disabled: true }]), run: (l, lid) => { const x = m.lists.find(y => y.id === lid); if (!x) return; l.forEach(t => { if (!x.ids.includes(t.id)) x.ids.push(t.id); }); redo(); } },
+      { id: 'unpl', label: T('إزالة من القائمة الحالية', 'Remove from this list'), icon: 'minus', when: () => !!curList, run: l => { const x = m.lists.find(y => y.id === curList); if (x) { const ids = new Set(l.map(t => t.id)); x.ids = x.ids.filter(i => !ids.has(i)); redo(); } } }
+    ],
+    del: async l => { const ids = new Set(l.map(t => t.id)); if (curId && ids.has(curId)) stop(); for (const t of l) { try { await MSA.files.del(t.file); } catch (x) {} } m.tracks = m.tracks.filter(t => !ids.has(t.id)); m.lists.forEach(x => { x.ids = x.ids.filter(i => !ids.has(i)); }); order = order.filter(i => !ids.has(i)); } });
+  else MSA.multi.simple(h, { key: 'media-video', item: '.vc', ctlSelect: true, get: id => m.videos.find(x => x.id === id), btnHost: '.mediav .row', name: v => v.title, refresh: redo, bgMenu: false,
+    extra: [
+      { id: 'vplay', label: T('تشغيل', 'Play'), icon: 'play', single: true, run: l => playVideo(l[0]) },
+      { id: 'vren', label: T('تغيير الاسم', 'Rename'), icon: 'pencil', single: true, run: async l => { const n = await MSA.ask({ title: T('اسم الفيديو', 'Video name'), value: l[0].title }); if (n) { l[0].title = n; redo(); } } }
+    ],
+    del: async l => { const ids = new Set(l.map(v => v.id)); for (const v of l) if (v.file) { try { await MSA.files.del(v.file); } catch (x) {} } m.videos = m.videos.filter(v => !ids.has(v.id)); } });
 }
 function wire(h){
   h.addEventListener('click', async e => {

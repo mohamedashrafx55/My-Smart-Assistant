@@ -16,7 +16,7 @@ async def main():
         await pg.evaluate("""async()=>{const dt=new DataTransfer();dt.items.add(new File([new Uint8Array([1,2,3,4,5])],'bad.png',{type:'image/png'}));const st=document.getElementById('bdStage');st.dispatchEvent(new DragEvent('drop',{dataTransfer:dt,bubbles:true,cancelable:true,clientX:600,clientY:400}))}"""); await pg.wait_for_timeout(1200)
         ok('corrupt image is skipped (no blank item)', len(await items(pg))==n0+1 and not await pg.evaluate("(()=>{let s=null;MSA.proj.walk(MSA.state.projects.find(p=>p.status!=='done').steps,x=>{if(!s&&x.key==='mood')s=x});return s.atts.some(a=>a.name==='bad.png')})()"))
         # deleting the project removes board-trash files too
-        await pg.keyboard.press('Control+a'); await pg.keyboard.press('Delete'); await pg.wait_for_timeout(300)
+        await pg.keyboard.press('Control+a'); await pg.keyboard.press('Delete'); await pg.wait_for_timeout(250); await pg.evaluate(CONFJS); await pg.wait_for_timeout(300)
         tr=await pg.evaluate("(()=>{let s=null;MSA.proj.walk(MSA.state.projects.find(p=>p.status!=='done').steps,x=>{if(!s&&x.key==='mood')s=x});return s.board.trash.map(a=>a.id)})()")
         ok('trash holds the removed pictures', len(tr)>=1, tr)
         own=await pg.evaluate("(()=>{const p=MSA.state.projects.find(p=>p.status!=='done');return MSA.proj.ownedAtts(p.steps).map(a=>a.id)})()")

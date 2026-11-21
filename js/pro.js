@@ -182,7 +182,7 @@ function tShots(p, box){
     ['s', 'c'].forEach(k => $$('[data-' + k + ']', box).forEach(r => {
       const x = list(k).find(y => y.id === r.dataset[k]); if (!x) return;
       $$('[data-f]', r).forEach(i => { if (i.dataset.f === 'done') i.onchange = () => { x.done = i.checked; save(); draw(); }; else { i.oninput = () => { x[i.dataset.f] = i.value; save(); }; if (i.dataset.f === 'tc') i.onchange = draw; } });
-      $('[data-del]', r).onclick = () => { const l = list(k); l.splice(l.indexOf(x), 1); save(); draw(); };
+      $('[data-del]', r).onclick = async () => { if (!await MSA.confirmDel()) return; const l = list(k); l.splice(l.indexOf(x), 1); save(); draw(); };
     }));
     $('[data-a=adds]', box).onclick = () => { sh.push({ id: U.uid('sh'), tc: '00:00', title: '', text: '', done: false }); save(); draw(); };
     $('[data-a=addc]', box).onclick = () => { vc.push({ id: U.uid('vc'), tc: '00:00', text: '', done: false }); save(); draw(); };

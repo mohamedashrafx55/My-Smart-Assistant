@@ -24,9 +24,9 @@ const timeOf = x => { const m = String(x.due || '').match(/T(\d\d):(\d\d)/); ret
 const PR = { urgent: 0, high: 1, normal: 2, low: 3 };
 const sorter = (a, b) => (isDone(a) - isDone(b)) || ((timeOf(a) || '99') < (timeOf(b) || '99') ? -1 : (timeOf(a) || '99') > (timeOf(b) || '99') ? 1 : 0) || (PR[a.priority] - PR[b.priority]) || ((a.created || 0) - (b.created || 0));
 const overdue = () => all().filter(x => !isDone(x) && !x.routine && keyOf(x) && keyOf(x) < todayKey()).sort((a, b) => keyOf(a) < keyOf(b) ? -1 : 1);
-const undated = () => all().filter(x => !isDone(x) && !keyOf(x)).sort(sorter);
-const onDay = k => all().filter(x => keyOf(x) === k && !x.routine).sort(sorter);   /* routine tasks live in their own collapsible panel */
-const routineDay = k => all().filter(x => keyOf(x) === k && x.routine).sort((a, b) => String(a.start || a.due) < String(b.start || b.due) ? -1 : 1);
+const undated = () => all().filter(x => !isDone(x) && !x.routine && !keyOf(x)).sort(sorter);
+const onDay = k => all().filter(x => keyOf(x) === k && !x.routine).sort(sorter);   /* the routine is a repeating template with its own tab, never part of the day lists */
+const routineList = () => MSA.sched ? MSA.sched.list().filter(x => x.type === 'task') : [];
 function setDay(x, k){ x.due = k + 'T' + (timeOf(x) || '23:59'); x.notified = false; x.updated = Date.now(); }
 const wk = () => { const u = S().ui; u.wk = u.wk || {}; return u.wk; };
 
@@ -36,7 +36,7 @@ function ensure(){
   if (!weekStart) weekStart = startOfWeek(new Date());
   if (!selKey) selKey = todayKey();
 }
-const mode = () => wk().mode === 'week' ? 'week' : 'day';
+const mode = () => wk().mode === 'week' ? 'week' : (wk().mode === 'routine' && !(S().routine && S().routine.off) ? 'routine' : 'day');
 const persist = () => { MSA.save(); MSA.updateCounts && MSA.updateCounts(); };
 
 /* ---------- rows ---------- */
@@ -57,7 +57,7 @@ function rowHTML(x, o){
   if (x.remind) meta.push('<span class="pill">' + I('bell', 'sm') + '</span>');
   if (x.atts && x.atts.length) meta.push('<span class="pill">' + I('clip', 'sm') + x.atts.length + '</span>');
   (x.tags || []).slice(0, 2).forEach(g => meta.push('<span class="pill">#' + esc(g) + '</span>'));
-  return '<div class="wk-t p-' + esc(x.priority || 'normal') + (isDone(x) ? ' done' : '') + '" draggable="true" data-id="' + esc(x.id) + '">' +
+  return '<div class="wk-t p-' + esc(x.priority || 'normal') + (isDone(x) ? ' done' : '') + '" draggable="' + (x.routine ? 'false' : 'true') + '" data-id="' + esc(x.id) + '">' +
     '<input type="checkbox" class="cb" data-wk="done" ' + (isDone(x) ? 'checked' : '') + ' aria-label="' + esc(T('تم', 'Done')) + '">' +
     '<div class="wk-b" data-wk="edit" role="button" tabindex="0"><span class="wk-ti" dir="auto">' + esc(x.title || T('بدون عنوان', 'Untitled')) + '</span>' + (meta.length ? '<span class="wk-m">' + meta.join('') + '</span>' : '') + subsHTML(x) + '</div>' +
     '<button class="icon-btn sm" data-wk="more" aria-label="' + esc(T('المزيد', 'More')) + '">' + I('more', 'sm') + '</button></div>';
@@ -68,18 +68,24 @@ const secHTML = (title, cls, rows, extra) => '<div class="wk-sec ' + (cls || '')
 function widgetHTML(){
   ensure(); MSA.sched && MSA.sched.ensure();
   const tk = todayKey(), days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), keys = days.map(dk);
-  const wkAll = keys.flatMap(onDay), done = wkAll.filter(isDone).length, tot = wkAll.length, pct = tot ? Math.round(done * 100 / tot) : 0;
+  const rtl = routineList(), wkAll = mode() === 'routine' ? rtl : keys.flatMap(onDay), done = wkAll.filter(isDone).length, tot = wkAll.length, pct = tot ? Math.round(done * 100 / tot) : 0;
   const range = fmt(days[0], { day: 'numeric', month: 'short' }) + ' – ' + fmt(days[6], { day: 'numeric', month: 'short' });
   const hideDone = wk().hideDone === true, m = mode();
   const chips = days.map((d, i) => { const k = keys[i], open = onDay(k).filter(x => !isDone(x)).length;
     return '<button class="wk-d' + (k === selKey ? ' sel' : '') + (k === tk ? ' today' : '') + '" data-wk="day" data-k="' + k + '"><span class="wk-dw">' + esc(fmt(d, { weekday: 'short' })) + '</span><span class="wk-dn">' + d.getDate() + '</span><span class="wk-dc">' + (open ? open : '') + '</span></button>'; }).join('');
-  const od = overdue(), rtl = routineDay(selKey);
+  const od = m === 'routine' ? [] : overdue();
   let body = '';
   if (od.length) body += secHTML(T('متأخرة', 'Overdue'), 'bad', od.map(x => rowHTML(x, { date: true })), '<button class="btn sm ghost" data-wk="odtoday">' + esc(T('انقلها لليوم', 'Move to today')) + '</button>');
   const vis = l => hideDone ? l.filter(x => !isDone(x)) : l;
-  if (m === 'day') {
+  if (m === 'routine') {
+    const l = vis(rtl);
+    body += '<div class="wk-sec rt-sec"><div class="wk-sh"><b>' + I('repeat', 'sm') + ' ' + esc(MSA.sched.name()) + '</b><span class="wk-n">' + rtl.filter(isDone).length + '/' + rtl.length + '</span><button class="btn sm ghost" data-wk="routine">' + I('pencil', 'sm') + esc(T('تعديل الروتين', 'Edit routine')) + '</button></div>' +
+      '<div class="hint rt-hint">' + esc(T('بتتكرر كل يوم من نفسها — مش بتظهر في أيام الجدول. علّم اللي خلّصته النهارده وهترجع بكرة جديدة.', 'These repeat on their own every day and are not listed under each day. Tick what you did today; it comes back fresh tomorrow.')) + '</div>' +
+      (l.length ? l.map(x => rowHTML(x)).join('') : '<div class="wk-empty">' + esc(T('مفيش بنود — اضغط «تعديل الروتين» وضيف بنودك', 'No items — press “Edit routine” to add yours')) + '</div>') + '</div>';
+    const cf = MSA.sched.dayConflicts(todayKey());
+    if (cf.length) body += '<div class="wk-conf">⚠ ' + esc(T('تعارض في الروتين: ', 'Routine clash: ') + cf.map(p => MSA.sched.label(p[0]) + ' ↔ ' + MSA.sched.label(p[1])).join(' | ')) + '</div>';
+  } else if (m === 'day') {
     const l = vis(onDay(selKey));
-    if (wk().rtOpen) body += '<div class="wk-sec rt-sec"><div class="wk-sh"><b>' + esc(T('الروتين اليومي', 'Daily routine')) + '</b><span class="wk-n">' + rtl.filter(isDone).length + '/' + rtl.length + '</span><button class="btn sm ghost" data-wk="routine">' + I('pencil', 'sm') + esc(T('تعديل الروتين', 'Edit routine')) + '</button></div>' + (rtl.length ? rtl.map(x => rowHTML(x)).join('') : '<div class="wk-empty">' + esc(T('مفيش روتين لليوم ده', 'No routine for this day')) + '</div>') + '</div>';
     const cf = MSA.sched ? MSA.sched.dayConflicts(selKey) : [];
     if (cf.length) body += '<div class="wk-conf">⚠ ' + esc(T('فيه تعارض مواعيد النهارده: ', 'Schedule clash: ') + cf.map(p => MSA.sched.label(p[0]) + ' ↔ ' + MSA.sched.label(p[1])).join(' | ')) + '</div>';
     body += '<div class="wk-sec"><div class="wk-sh"><b>' + esc(selKey === tk ? T('النهارده', 'Today') : fmt(parseKey(selKey), { weekday: 'long', day: 'numeric', month: 'long' })) + '</b><span class="wk-n">' + l.length + '</span></div>' +
@@ -93,12 +99,11 @@ function widgetHTML(){
   return '<div class="wk-head"><div class="wk-ttl">' + I('checks', 'sm') + '<h3>' + esc(T('جدول المهام الأسبوعي', 'Weekly to-do')) + '</h3></div>' +
     '<div class="wk-nav"><button class="icon-btn sm" data-wk="prev" aria-label="prev">' + I('chev-r', 'sm flip') + '</button><button class="btn sm" data-wk="thisweek">' + esc(range) + '</button><button class="icon-btn sm" data-wk="next" aria-label="next">' + I('chev-l', 'sm flip') + '</button></div></div>' +
     '<div class="wk-bar"><i style="width:' + pct + '%"></i></div><div class="wk-sub"><span>' + esc(T(done + ' من ' + tot + ' اتعملت', done + ' of ' + tot + ' done')) + '</span><span class="wk-tools">' +
-      '<div class="seg" role="group"><button data-wk="mode" data-m="day" class="' + (m === 'day' ? 'on' : '') + '">' + esc(T('يوم', 'Day')) + '</button><button data-wk="mode" data-m="week" class="' + (m === 'week' ? 'on' : '') + '">' + esc(T('أسبوع', 'Week')) + '</button></div>' +
+      '<div class="seg" role="group"><button data-wk="mode" data-m="day" class="' + (m === 'day' ? 'on' : '') + '">' + esc(T('يوم', 'Day')) + '</button><button data-wk="mode" data-m="week" class="' + (m === 'week' ? 'on' : '') + '">' + esc(T('أسبوع', 'Week')) + '</button>' + (S().routine && S().routine.off ? '<button data-wk="routine" class="rt-tab" title="' + esc(T('الروتين متوقف — اضغط لتشغيله', 'Routine is off — press to turn it on')) + '">' + I('repeat', 'sm') + '<span class="rt-nm">' + esc(MSA.sched.name()) + '</span></button>' : '<button data-wk="mode" data-m="routine" class="rt-tab' + (m === 'routine' ? ' on' : '') + '" title="' + esc(MSA.sched.name()) + '">' + I('repeat', 'sm') + '<span class="rt-nm">' + esc(MSA.sched.name()) + '</span></button>') + '</div>' +
       '<button class="icon-btn sm' + (hideDone ? ' on' : '') + '" data-wk="hidedone" title="' + esc(T('إخفاء المكتملة', 'Hide completed')) + '" aria-label="hide done">' + I(hideDone ? 'eye-off' : 'eye', 'sm') + '</button>' +
-      '<button class="icon-btn sm rt-tg' + (wk().rtOpen ? ' on' : '') + '" data-wk="rtoggle" title="' + esc(T('الروتين اليومي', 'Daily routine')) + '" aria-label="routine" aria-pressed="' + !!wk().rtOpen + '">' + I('clock', 'sm') + (rtl.length ? '<span class="rt-n">' + rtl.filter(isDone).length + '/' + rtl.length + '</span>' : '') + '</button>' +
       '<button class="icon-btn sm' + (dailyOn ? ' on' : '') + '" data-wk="alert" title="' + esc(T('التنبيه اليومي', 'Daily alert')) + '" aria-label="alert">' + I('bell', 'sm') + '</button></span></div>' +
-    '<div class="wk-days">' + chips + '</div>' +
-    '<div class="wk-add"><input id="wkIn" dir="auto" maxlength="200" placeholder="' + esc(T('أضف مهمة لـ ' + (selKey === tk ? 'النهارده' : fmt(parseKey(selKey), { weekday: 'long' })) + '…', 'Add a task for ' + (selKey === tk ? 'today' : fmt(parseKey(selKey), { weekday: 'long' })) + '…')) + '"><input id="wkTm" type="time" aria-label="' + esc(T('الوقت (اختياري)', 'Time (optional)')) + '"><button class="btn sm primary" data-wk="add">' + I('plus', 'sm') + '</button><button class="btn sm" data-wk="full" title="' + esc(T('تفاصيل كاملة (أولوية، تذكير، تكرار…)', 'Full details (priority, reminder, repeat…)')) + '">' + I('pencil', 'sm') + '</button></div>' +
+    (m === 'routine' ? '' : '<div class="wk-days">' + chips + '</div>') +
+    (m === 'routine' ? '' : '<div class="wk-add"><input id="wkIn" dir="auto" maxlength="200" placeholder="' + esc(T('أضف مهمة لـ ' + (selKey === tk ? 'النهارده' : fmt(parseKey(selKey), { weekday: 'long' })) + '…', 'Add a task for ' + (selKey === tk ? 'today' : fmt(parseKey(selKey), { weekday: 'long' })) + '…')) + '"><input id="wkTm" type="time" aria-label="' + esc(T('الوقت (اختياري)', 'Time (optional)')) + '"><button class="btn sm primary" data-wk="add">' + I('plus', 'sm') + '</button><button class="btn sm" data-wk="full" title="' + esc(T('تفاصيل كاملة (أولوية، تذكير، تكرار…)', 'Full details (priority, reminder, repeat…)')) + '">' + I('pencil', 'sm') + '</button></div>') +
     '<div class="wk-list">' + body + '</div>' +
     '<div class="wk-foot"><button class="btn sm ghost" data-wk="clear">' + I('trash', 'sm') + esc(T('مسح المكتملة', 'Clear completed')) + '</button><button class="btn sm ghost" data-wk="all">' + esc(T('كل المهام والملاحظات', 'All tasks & notes')) + I('chev-l', 'sm flip') + '</button></div>';
 }
@@ -111,6 +116,7 @@ function addTask(title, k, time){
   persist(); return true;
 }
 function rowMenu(x, ev){
+  if (x.routine) { MSA.ctx(ev.clientX, ev.clientY, [{ label: T('تعديل كامل', 'Edit'), icon: 'pencil', onClick: () => MSA.openTaskEditor(x) }, { label: T('تعديل الروتين', 'Edit routine'), icon: 'repeat', onClick: () => MSA.sched.manage(() => redraw()) }]); return; }
   const tk = todayKey(), tomorrow = dk(addDays(new Date(), 1));
   const mv = (k, msg) => () => { setDay(x, k); persist(); redraw(); MSA.toast(msg, 'ok'); };
   const items = [
@@ -131,7 +137,6 @@ function wire(el){
     if (e.target.closest('.wk-subs') && !e.target.matches('input')) return;
     const b = e.target.closest('[data-wk]'); if (!b) return; const a = b.dataset.wk, row = b.closest('[data-id]'), x = row ? byId(row.dataset.id) : null;
     if (a === 'sub') { const sx = row ? byId(row.dataset.id) : null, c = sx && (sx.checklist || []).find(i => i.id === b.dataset.sid); if (c) { c.done = b.checked; sx.updated = Date.now(); persist(); redraw(); } return; }
-    if (a === 'rtoggle') { wk().rtOpen = !wk().rtOpen; if (wk().rtOpen) wk().mode = 'day'; MSA.save(); redraw(); return; }
     if (a === 'routine') { MSA.sched.manage(() => redraw()); return; }
     if (a === 'done') { if (x) { API().setDone(x, b.checked); persist(); redraw(); } return; }
     if (a === 'edit') { if (x) MSA.openTaskEditor(x); return; }
@@ -147,7 +152,7 @@ function wire(el){
     if (a === 'full') { const i = $('#wkIn', el); const title = i.value.trim(); i.value = ''; MSA.openTaskEditor(null, { type: 'task', title, due: selKey + 'T23:59' }); return; }
     if (a === 'odtoday') { overdue().forEach(y => setDay(y, todayKey())); persist(); redraw(); return; }
     if (a === 'clear') {
-      const ds = all().filter(isDone); if (!ds.length) { MSA.toast(T('مفيش مهام مكتملة', 'No completed tasks'), 'info'); return; }
+      const ds = all().filter(x => isDone(x) && !x.routine); if (!ds.length) { MSA.toast(T('مفيش مهام مكتملة', 'No completed tasks'), 'info'); return; }
       if (await MSA.confirm(T('مسح ' + ds.length + ' مهمة مكتملة نهائيًا؟', 'Permanently delete ' + ds.length + ' completed task(s)?'), { danger: true, okLabel: T('مسح', 'Delete') })) { for (const y of ds) { try { await MSA.files.delMany(y.atts); } catch (er) {} } const ids = new Set(ds.map(y => y.id)); S().tasks = S().tasks.filter(y => !ids.has(y.id)); persist(); redraw(); }
       return;
     }

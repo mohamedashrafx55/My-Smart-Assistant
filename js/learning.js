@@ -123,10 +123,11 @@ async function renameItem(k, id){
   o[key] = v; if (k === 'v') o.titleSet = true; afterChange();
 }
 function colorize(items){
-  const fs = items.filter(i => i.k === 'f').map(i => folder(i.id)).filter(Boolean); if (!fs.length) return;
-  MSA.modal({ title: t('folderColor'), body: '<div class="swatches" id="sws">' + COLORS.map(c => '<button class="sw ' + (fs[0].color === c ? 'on' : '') + '" data-c="' + c + '" style="background:' + c + '" aria-label="' + c + '"></button>').join('') + '<label class="sw" style="display:grid;place-items:center;background:var(--panel2);cursor:pointer" title="' + U.esc(t('custom')) + '">' + I('palette', 'sm') + '<input type="color" id="cust" style="position:absolute;opacity:0;width:0;height:0"></label></div>', footer: false,
+  const fs = items.filter(i => i.k === 'f').map(i => folder(i.id)).filter(Boolean), vs = items.filter(i => i.k === 'v').map(i => L().videos.find(v => v.id === i.id)).filter(Boolean); if (!fs.length && !vs.length) return;
+  const first = (fs[0] || vs[0]).color;
+  MSA.modal({ title: t('folderColor'), body: '<div class="swatches" id="sws">' + COLORS.map(c => '<button class="sw ' + (first === c ? 'on' : '') + '" data-c="' + c + '" style="background:' + c + '" aria-label="' + c + '"></button>').join('') + (vs.length ? '<button class="sw" data-c="" style="background:var(--panel2);display:grid;place-items:center" title="' + U.esc(MSA.T('بدون لون', 'No colour')) + '">' + I('x', 'sm') + '</button>' : '') + '<label class="sw" style="display:grid;place-items:center;background:var(--panel2);cursor:pointer" title="' + U.esc(t('custom')) + '">' + I('palette', 'sm') + '<input type="color" id="cust" style="position:absolute;opacity:0;width:0;height:0"></label></div>', footer: false,
     onMount: (el, api) => {
-      const apply = c => { fs.forEach(f => f.color = c); api.close(); afterChange(); };
+      const apply = c => { if (c) fs.forEach(f => f.color = c); vs.forEach(v => { if (c) v.color = c; else delete v.color; }); api.close(); afterChange(); };
       $$('[data-c]', el).forEach(b => b.onclick = () => apply(b.dataset.c));
       $('#cust', el).onchange = e => apply(e.target.value);
       $('label.sw', el).onclick = () => $('#cust', el).click();
@@ -168,7 +169,7 @@ function folderCard(f, q){
 }
 function videoCard(v, q){
   const k = 'v:' + v.id, on = sel.has(k), cut = clip && clip.mode === 'cut' && clip.items.some(i => i.id === v.id), th = thumbOf(v);
-  return '<div class="card vcard ' + (on ? 'is-sel ' : '') + (cut ? 'is-cut' : '') + '" draggable="true" data-kind="v" data-id="' + v.id + '">' +
+  const mcx = MSA.multi.mc(v, true); return '<div class="card vcard ' + (on ? 'is-sel ' : '') + (cut ? 'is-cut' : '') + mcx.cls + '"' + mcx.sty + ' draggable="true" data-kind="v" data-id="' + v.id + '">' +
     '<div class="vthumb" style="' + (th ? 'background-image:url(\'' + U.esc(th) + '\')' : 'background:linear-gradient(135deg,#2c3e50,#4b6a88)') + '">' + (th ? '' : I('video', 'lg')) +
     '<span class="play">' + I('play') + '</span><span class="host">' + U.esc(hostOf(v.url)) + '</span></div>' +
     '<input type="checkbox" class="cb selbox ' + (on ? 'on' : '') + '" data-act="sel" ' + (on ? 'checked' : '') + ' aria-label="select">' +
@@ -195,14 +196,14 @@ function renderVideos(host){
     '<button class="btn ' + (selMode ? 'primary' : '') + '" data-act="selmode">' + I('check-c', 'sm') + U.esc(t('select')) + '</button>' +
     '<div class="grow" style="min-width:140px;position:relative"><input type="search" id="lq" value="' + U.esc(query) + '" placeholder="' + U.esc(t('search')) + '" style="padding-inline-start:36px"><span style="position:absolute;top:50%;transform:translateY(-50%);inset-inline-start:11px;opacity:.55;display:grid">' + I('search', 'sm') + '</span></div>' +
     '<select id="lsort" style="width:auto"><option value="name" ' + (sort === 'name' ? 'selected' : '') + '>' + U.esc(t('sortName')) + '</option><option value="new" ' + (sort === 'new' ? 'selected' : '') + '>' + U.esc(t('sortNew')) + '</option></select></div>';
-  if (nsel) {
+  if (nsel || selMode) {
     const one = nsel === 1, hasF = selectedItems().some(i => i.k === 'f');
-    html += '<div class="sel-bar"><b style="margin-inline-end:6px">' + U.esc(t('selected', { n: nsel })) + '</b>' +
-      (one ? '<button class="btn sm" data-act="s-rename">' + I('pencil', 'sm') + U.esc(t('rename')) + '</button>' : '') +
+    html += '<div class="sel-bar"><b style="margin-inline-end:6px">' + U.esc(t('selected', { n: nsel })) + '</b><button class="btn sm" data-act="s-all">' + I('checks', 'sm') + U.esc(MSA.T('تحديد الكل', 'Select all')) + '</button>' +
+      (!nsel ? '' : (one ? '<button class="btn sm" data-act="s-rename">' + I('pencil', 'sm') + U.esc(t('rename')) + '</button>' : '') +
       '<button class="btn sm" data-act="s-copy">' + I('copy', 'sm') + U.esc(t('copy')) + '</button>' +
       '<button class="btn sm" data-act="s-cut">' + I('scissors', 'sm') + U.esc(t('cut')) + '</button>' +
-      (hasF ? '<button class="btn sm" data-act="s-color">' + I('palette', 'sm') + U.esc(t('folderColor')) + '</button>' : '') +
-      '<button class="btn sm danger" data-act="s-del">' + I('trash', 'sm') + U.esc(t('delete')) + '</button>' +
+      '<button class="btn sm" data-act="s-color">' + I('palette', 'sm') + U.esc(t('folderColor')) + '</button>' +
+      '<button class="btn sm danger" data-act="s-del">' + I('trash', 'sm') + U.esc(t('delete')) + '</button>') +
       '<button class="btn sm ghost" data-act="s-clear" style="margin-inline-start:auto">' + I('x', 'sm') + '</button></div>';
   }
   const favCard = !cid && !favMode() && !q ? '<div class="card fold favfold" data-favfolder="1" style="--fc:var(--warn);cursor:pointer"><div class="fi">' + I('star') + '</div><div class="grow"><div class="ft">★ ' + U.esc(MSA.T('المفضلة', 'Favourites')) + '</div><div class="fs">' + U.esc(t('itemsCount', { n: L().videos.filter(v => v.fav).length })) + '</div></div></div>' : '';
@@ -228,7 +229,7 @@ function bind(host){
     if (one) m.push({ icon: 'pencil', label: t('rename'), onClick: () => renameItem(it.k, it.id) });
     m.push({ icon: 'copy', label: t('copy'), onClick: () => setClip('copy', items) }, { icon: 'scissors', label: t('cut'), onClick: () => setClip('cut', items) });
     if (clip && isF && one) m.push({ icon: 'paste', label: t('pasteHere'), onClick: () => pasteInto(it.id) });
-    if (items.some(i => i.k === 'f')) m.push({ icon: 'palette', label: t('folderColor'), onClick: () => colorize(items) });
+    m.push({ icon: 'palette', label: MSA.T('تلوين', 'Colour'), onClick: () => colorize(items) });
     if (!isF && one) m.push({ icon: 'external', label: t('openLink'), onClick: () => MSA.openLink(L().videos.find(v => v.id === it.id).url) });
     m.push('-', { icon: 'trash', label: t('delete'), danger: true, onClick: () => deleteItems(items) });
     MSA.ctx(x, y, m);
@@ -245,6 +246,7 @@ function bind(host){
     's-rename': () => { const i = selectedItems()[0]; renameItem(i.k, i.id); },
     's-copy': () => setClip('copy', selectedItems()), 's-cut': () => setClip('cut', selectedItems()),
     's-color': () => colorize(selectedItems()), 's-del': () => deleteItems(selectedItems()),
+    's-all': () => { kids(curId()).forEach(f => sel.add('f:' + f.id)); vids(curId()).forEach(v => sel.add('v:' + v.id)); selMode = true; MSA.rerender(); },
     's-clear': () => { sel.clear(); selMode = false; MSA.rerender(); }
   });
   host.addEventListener('click', e => {

@@ -9,6 +9,7 @@ const NCOLORS = ['', '#5a4a1e', '#1e4a35', '#1e3a5a', '#4a1e3a', '#4a2a1e', '#3a
 const NCOLORS_L = ['', '#fff3c4', '#d6f5e5', '#d7e8fb', '#fbdcea', '#fde2cf', '#e6dcfb'];
 const REMIND = [['', 'none'], ['0', 'atDue'], ['5', 'm5'], ['15', 'm15'], ['30', 'm30'], ['60', 'h1'], ['180', 'h3'], ['1440', 'd1'], ['custom', 'custom']];
 const T = () => MSA.state.tasks;
+const V = () => MSA.state.tasks.filter(x => !x.routine);   /* read-only views never include the repeating routine (it has its own tab in the weekly table) */
 let view = null, filt = { q: '', prio: '', tag: '', showDone: false };
 let calMonth = null;   // Date at 1st of month
 
@@ -21,7 +22,7 @@ function remindMs(x){
   if (x.remind === 'custom') return U.toMs(x.remindAt);
   const d = dueMs(x); return d == null ? null : d - (+x.remind) * 60000;
 }
-function allTags(){ const s = new Set(); T().forEach(x => (x.tags || []).forEach(g => s.add(g))); return Array.from(s).sort(); }
+function allTags(){ const s = new Set(); V().forEach(x => (x.tags || []).forEach(g => s.add(g))); return Array.from(s).sort(); }
 function matches(x){
   if (filt.prio && x.priority !== filt.prio) return false;
   if (filt.tag && !(x.tags || []).includes(filt.tag)) return false;
@@ -40,6 +41,7 @@ const metaRow = x => '<div class="meta">' + (x.type === 'task' ? prioIcon(x.prio
 
 /* ---------- completion (with repeat) ---------- */
 function setDone(x, v){
+  if (x.routine) { if (v) { x.status = 'done'; x.completedAt = Date.now(); } else { x.status = 'todo'; delete x.completedAt; } x.updated = Date.now(); return; }   /* routine repeats by itself: ticked for today, back tomorrow */
   if (v) {
     if (x.repeat && dueMs(x) != null) {
       const step = d => { const n = new Date(d); if (x.repeat === 'daily') n.setDate(n.getDate() + 1); else if (x.repeat === 'weekly') n.setDate(n.getDate() + 7); else n.setMonth(n.getMonth() + 1); return n.getTime(); };
@@ -56,7 +58,7 @@ const refresh = () => { MSA.save(); MSA.updateCounts(); MSA.rerender(); };
 /* ---------- rendering ---------- */
 function render(host){
   view = MSA.state.ui.tasksView || 'list';
-  const open = T().filter(x => x.type === 'task' && !isDone(x)).length;
+  const open = V().filter(x => x.type === 'task' && !isDone(x)).length;
   let html = '<div class="page-head"><div><h1>' + I('checks', 'lg') + U.esc(t('nav.tasks')) + '</h1><div class="sub">' + U.esc(t('tasks.sub', { n: open })) + '</div></div>' +
     '<div class="row"><button class="btn" data-act="newnote">' + I('note', 'sm') + U.esc(t('newNote')) + '</button><button class="btn primary" data-act="newtask">' + I('plus', 'sm') + U.esc(t('newTask')) + '</button></div></div>';
   html += '<div class="tbar"><div class="seg" id="tv">' +
@@ -78,7 +80,7 @@ function row(x){
     '<div class="grow"><div class="tt">' + U.esc(x.title) + '</div>' + metaRow(x) + '</div><span class="st st-' + x.status + '">' + U.esc(t('status.' + x.status)) + '</span></div>';
 }
 function listHTML(){
-  const tasks = T().filter(x => x.type === 'task' && matches(x));
+  const tasks = V().filter(x => x.type === 'task' && matches(x));
   const open = tasks.filter(x => !isDone(x)), done = tasks.filter(isDone);
   const now = Date.now(), today = ymd(now);
   const sortFn = (a, b) => ((dueMs(a) ?? 9e15) - (dueMs(b) ?? 9e15)) || (PRANK[a.priority] - PRANK[b.priority]);
@@ -96,7 +98,7 @@ function listHTML(){
   return html;
 }
 function boardHTML(){
-  const tasks = T().filter(x => x.type === 'task' && matches(x));
+  const tasks = V().filter(x => x.type === 'task' && matches(x));
   return '<div class="board">' + STATUSES.map(s => {
     const arr = tasks.filter(x => x.status === s).sort((a, b) => ((dueMs(a) ?? 9e15) - (dueMs(b) ?? 9e15)) || (PRANK[a.priority] - PRANK[b.priority]));
     return '<div class="col" data-status="' + s + '"><h3><span class="st st-' + s + '">' + U.esc(t('status.' + s)) + '</span><span class="muted">' + arr.length + '</span><button class="icon-btn sm" style="margin-inline-start:auto" data-act="coladd" data-s="' + s + '" aria-label="' + U.esc(t('newTask')) + '">' + I('plus', 'sm') + '</button></h3>' +
@@ -104,7 +106,7 @@ function boardHTML(){
   }).join('') + '</div>';
 }
 function notesHTML(){
-  const notes = T().filter(x => x.type === 'note' && matches(x)).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.updated || 0) - (a.updated || 0));
+  const notes = V().filter(x => x.type === 'note' && matches(x)).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (b.updated || 0) - (a.updated || 0));
   if (!notes.length) return MSA.empty('note', t('notes.empty'), t('notes.emptySub'));
   const light = document.documentElement.dataset.theme === 'light';
   return '<div class="notes-grid">' + notes.map(x => {
@@ -122,7 +124,7 @@ function calHTML(){
   const loc = lang === 'ar' ? 'ar-u-nu-latn' : 'en-GB';
   const title = new Intl.DateTimeFormat(loc, { month: 'long', year: 'numeric' }).format(first);
   const dow = Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(loc, { weekday: 'short' }).format(new Date(2024, 0, 7 + ((startDow + i) % 7))));
-  const byDay = {}; T().filter(x => x.type === 'task' && matches(x) && dueMs(x) != null).forEach(x => (byDay[ymd(dueMs(x))] = byDay[ymd(dueMs(x))] || []).push(x));
+  const byDay = {}; V().filter(x => x.type === 'task' && matches(x) && dueMs(x) != null).forEach(x => (byDay[ymd(dueMs(x))] = byDay[ymd(dueMs(x))] || []).push(x));
   const todayK = ymd(Date.now());
   let cells = '';
   for (let i = 0; i < 42; i++) {
@@ -341,12 +343,12 @@ function openEditor(existing, preset){
     $('#tClAdd', el).onclick = addCl; $('#tClNew', el).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addCl(); } });
     $('#tCl', el).addEventListener('change', e => { const r = e.target.closest('[data-cid]'); if (!r) return; const c = x.checklist.find(i => i.id === r.dataset.cid); if (c && e.target.type === 'checkbox') c.done = e.target.checked; });
     $('#tCl', el).addEventListener('input', e => { const r = e.target.closest('[data-cid]'); if (!r) return; const c = x.checklist.find(i => i.id === r.dataset.cid); if (c && e.target.type === 'text') c.text = e.target.value; });
-    $('#tCl', el).addEventListener('click', e => { const d = e.target.closest('[data-cdel]'); if (!d) return; collect(el); x.checklist = x.checklist.filter(i => i.id !== d.closest('[data-cid]').dataset.cid); draw(); });
+    $('#tCl', el).addEventListener('click', async e => { const d = e.target.closest('[data-cdel]'); if (!d) return; if (!await MSA.confirmDel(TT('حذف هذه الخطوة؟', 'Delete this sub-task?'))) return; collect(el); x.checklist = x.checklist.filter(i => i.id !== d.closest('[data-cid]').dataset.cid); draw(); });
     const addTag = () => { const i = $('#tTagNew', el), v = i.value.trim().replace(/^#/, ''); if (!v) return; collect(el); if (!x.tags.includes(v)) x.tags.push(v); draw(); setTimeout(() => $('#tTagNew', m.el).focus(), 20); };
     $('#tTagNew', el).addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(); } });
     $('#tTags', el).addEventListener('click', e => { const d = e.target.closest('[data-tdel]'); if (!d) return; collect(el); x.tags = x.tags.filter(g => g !== d.dataset.tdel); draw(); });
     $$('[data-add]', el).forEach(b => b.onclick = async () => { collect(el); const atts = await MSA.addFiles(b.dataset.add); if (atts.length) { x.atts.push(...atts); added.push(...atts); draw(); } });
-    MSA.bindAtts($('#tAtts', el), () => x.atts, id => { collect(el); x.atts = x.atts.filter(a => a.id !== id); draw(); });
+    MSA.bindAtts($('#tAtts', el), () => x.atts, async id => { if (!await MSA.confirmDel(TT('إزالة المرفق؟', 'Remove this attachment?'))) return; collect(el); x.atts = x.atts.filter(a => a.id !== id); draw(); });
   };
   draw();
   setTimeout(() => { const i = $('#tTitle', m.el); if (i && !existing) i.focus(); }, 60);
@@ -372,7 +374,7 @@ function checkReminders(first){
   if (fired) { MSA.save(); if (MSA.view === 'tasks') MSA.rerender(); }
 }
 MSA.startReminders = function(){ setTimeout(() => checkReminders(true), 1500); setInterval(() => checkReminders(false), 15000); };
-MSA.taskStats = () => ({ open: T().filter(x => x.type === 'task' && !isDone(x)).length, notes: T().filter(x => x.type === 'note').length });
+MSA.taskStats = () => ({ open: V().filter(x => x.type === 'task' && !isDone(x)).length, notes: V().filter(x => x.type === 'note').length });
 
 MSA.tasksApi = { setDone, blank, refresh, toInput };
 MSA.views.tasks = { render };

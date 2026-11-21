@@ -38,3 +38,5 @@ def summary():
     f=[r for r in R if not r[1]]; print('\n%d/%d passed'%(len(R)-len(f),len(R)));
     for r in f: print('  FAILED:',r[0],r[2])
     return len(f)
+
+CONFJS="(()=>{const b=[...document.querySelectorAll('#overlayRoot .btn.primary,#overlayRoot .btn.danger')].pop();if(b){b.click();return true}return false})()"

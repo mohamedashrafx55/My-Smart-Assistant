@@ -66,7 +66,7 @@ plus.payCard = function(p, host){
   $('[data-pa=msg]', host).onclick = () => plus.messages({ pid: p.id, kind: rem > 0.005 && pd > 0 || y.due ? 'pay' : 'quote' });
   const fin = $('[data-pa=fin]', host); if (fin) fin.onclick = () => plus.financeSetup(p, redo);
   $$('[data-plan-pay]', host).forEach(b => b.onclick = () => { const m = (y.plan || []).find(x => x.id === b.dataset.planPay); if (!m) return; addPayment(p, redo, { amt: Math.round(total(p) * m.pct) / 100, note: m.label }); });
-  $$('[data-pdel]', host).forEach(b => b.onclick = () => { y.items = y.items.filter(x => x.id !== b.dataset.pdel); MSA.save(); redo(); });
+  $$('[data-pdel]', host).forEach(b => b.onclick = async () => { if (!await MSA.confirmDel(T('حذف هذا البند؟', 'Delete this item?'))) return; y.items = y.items.filter(x => x.id !== b.dataset.pdel); MSA.save(); redo(); });
   $('#pyDue', host).onchange = e => { y.due = e.target.value; MSA.save(); };
 };
 
@@ -157,7 +157,7 @@ plus.financeSetup = function(p, done){
     const f = $('#fnFixed', body); if (f) f.oninput = e => { fixed = num(e.target.value); upd(); };
     $$('[data-pl]', body).forEach(i => i.oninput = e => { plan[+i.dataset.pl][0] = e.target.value; });
     $$('[data-pp]', body).forEach(i => i.oninput = e => { plan[+i.dataset.pp][1] = num(e.target.value); upd(); });
-    $$('[data-pd]', body).forEach(b => b.onclick = () => { plan.splice(+b.dataset.pd, 1); draw(); });
+    $$('[data-pd]', body).forEach(b => b.onclick = async () => { if (!await MSA.confirmDel(T('حذف هذه الدفعة؟', 'Delete this payment?'))) return; plan.splice(+b.dataset.pd, 1); draw(); });
     const add = $('[data-padd]', body); if (add) add.onclick = () => { plan.push([T('دفعة', 'Payment'), Math.max(0, 100 - sumPct())]); draw(); };
   };
   const upd = () => {

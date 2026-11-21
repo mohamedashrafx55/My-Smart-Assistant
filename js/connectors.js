@@ -83,7 +83,7 @@ MSA.wireConn = function(root, redraw){
   const box = $('#connSec', root); if (!box) return; const c = st();
   if (MSA.wireExploreSettings) MSA.wireExploreSettings(box);
   $$('[data-conn]', box).forEach(i => i.onchange = () => { if (i.checked) delete c.off[i.dataset.conn]; else c.off[i.dataset.conn] = true; MSA.save(); });
-  $$('[data-conn-del]', box).forEach(b => b.onclick = () => { c.custom = c.custom.filter(x => x.id !== b.dataset.connDel); MSA.save(); redraw(); });
+  $$('[data-conn-del]', box).forEach(b => b.onclick = async () => { if (!await MSA.confirmDel(T('حذف الموصّل؟', 'Delete this connector?'))) return; c.custom = c.custom.filter(x => x.id !== b.dataset.connDel); MSA.save(); redraw(); });
   $('#cnAdd', box).onclick = () => {
     const n = $('#cnName', box).value.trim(); let u = $('#cnUrl', box).value.trim(); if (!n || !u) return;
     if (!/^https?:\/\//i.test(u)) u = 'https://' + u; c.custom.push({ id: U.uid('c'), name: n, url: u }); MSA.save(); redraw();

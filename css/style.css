@@ -1675,3 +1675,6 @@ html[data-motion=off] *,html[data-motion=off] *::before,html[data-motion=off] *:
 .cl-e h5{margin:4px 0 6px;font-size:15px}.cl-e ul{margin:0;padding-inline-start:20px;font-size:13.5px;line-height:1.7}
 .cl-top{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.cl-list{max-height:62vh;overflow:auto;padding-inline-end:4px}
 .cl-mini .cl-e{margin-bottom:8px}
+
+.rt-tab{display:inline-flex;align-items:center;gap:4px}.rt-nm{max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rt-hint{margin:2px 0 8px}
+.mcol{border-inline-start:5px solid var(--mcol)!important}.mfr{box-shadow:inset 0 0 0 2px var(--mcol);background:color-mix(in srgb,var(--mcol) 10%,var(--card,transparent))}tr.mcol>td:first-child{border-inline-start:5px solid var(--mcol)}tr.mfr>td{background:color-mix(in srgb,var(--mcol) 12%,transparent)}

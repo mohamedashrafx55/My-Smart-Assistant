@@ -164,10 +164,10 @@ function renderSettings(host){
       const row = e.target.closest('[data-aid]'), acc = S.accounts.find(x => x.id === row.dataset.aid); acc.platform = e.target.value; persist(); draw();
     }
   });
-  body.addEventListener('click', e => {
+  body.addEventListener('click', async e => {
     const row = e.target.closest('[data-aid]'); if (!row) return; const acc = S.accounts.find(x => x.id === row.dataset.aid);
     if (e.target.closest('[data-a-open]')) MSA.openLink(acc.url);
-    if (e.target.closest('[data-a-del]')) { S.accounts = S.accounts.filter(x => x.id !== acc.id); persist(); draw(); }
+    if (e.target.closest('[data-a-del]')) { if (!await MSA.confirmDel(T('حذف الحساب؟', 'Delete this account?'))) return; S.accounts = S.accounts.filter(x => x.id !== acc.id); persist(); draw(); }
   });
   /* single input listener on the body (draw() re-creates children only) */
   body.addEventListener('input', onInput);
