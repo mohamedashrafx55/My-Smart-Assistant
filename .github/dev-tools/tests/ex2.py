@@ -16,7 +16,7 @@ async def main():
         n=await pg.locator('[data-ex-site]').count()
         ok('sites tab lists 10+ famous sites',n>=10,n)
         names=await pg.evaluate("[...document.querySelectorAll('[data-ex-site]')].map(x=>x.textContent.trim())")
-        ok('Pinterest, Behance, Freepik, Dribbble present',all(x in names for x in ['Pinterest','Behance','Freepik','Dribbble']),names)
+        ok('Pinterest, Behance, Magnific, Dribbble present',all(x in names for x in ['Pinterest','Behance','Magnific','Dribbble']),names)
         ok('no embedded webview on web',await pg.locator('webview').count()==0)
         ok('explanatory note shown',await pg.locator('.ex-nokey').count()==1)
         await pg.click('[data-ex-site=pinterest]'); await pg.wait_for_timeout(100)
@@ -35,7 +35,7 @@ async def main():
         # turning a site off in connectors removes it
         await pg.evaluate("MSA.state.connectors.off.freepik=true;MSA.save()"); await pg.click('[data-ex-tab=images]'); await pg.click('[data-ex-tab=sites]'); await pg.wait_for_selector('[data-ex-site]')
         names=await pg.evaluate("[...document.querySelectorAll('[data-ex-site]')].map(x=>x.textContent.trim())")
-        ok('site turned off in Connectors disappears',('Freepik' not in names) and len(names)==n-1,names)
+        ok('site turned off in Connectors disappears',('Magnific' not in names) and len(names)==n-1,names)
         # step chips include the new sites where relevant
         h=await pg.evaluate("MSA.conn.links('mood','x').map(l=>l.name).join('|')")
         ok('mood-board step offers the new sites',all(x in h for x in ['Flickr','ArtStation','Awwwards']),h)

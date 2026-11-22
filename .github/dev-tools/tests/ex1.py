@@ -33,7 +33,7 @@ async def main():
         ok('no museum / weird names on screen',not any(x in t for x in ['Met Museum','Cleveland','Art Institute','Wikimedia','Openverse']),t[:200])
         ok('no-key state with site chips',await pg.locator('.ex-nokey .cchip').count()>=3)
         names=await pg.evaluate("[...document.querySelectorAll('.ex-nokey .cchip')].map(x=>x.textContent.trim()).join('|')")
-        ok('chips include Pinterest + Freepik + Behance',all(n in names for n in ['Pinterest','Freepik','Behance']),names)
+        ok('chips include Pinterest + Magnific + Behance',all(n in names for n in ['Pinterest','Magnific','Behance']),names)
         await pg.fill('[data-ex-q]','coffee'); await pg.keyboard.press('Enter'); await pg.wait_for_timeout(500)
         ok('search with no key shows friendly message not crash',await pg.locator('.ex-err').count()>=1 and not pg.errs,pg.errs)
         await pg.close()
@@ -48,7 +48,7 @@ async def main():
         ok('flickr + freepik chips appear with keys',await pg.locator('.ex-src').count()==2)
         await pg.evaluate("MSA.state.ui.exSrc=['flickr','freepik'];MSA.save()");
         await pg.fill('[data-ex-q]','coffee'); await pg.click('[data-ex=search]'); await pg.wait_for_timeout(1200)
-        ok('results from flickr and freepik merged',await pg.evaluate("[...document.querySelectorAll('.ex-badge')].map(x=>x.textContent).sort().join(',')")=='Flickr,Freepik')
+        ok('results from flickr and freepik merged',await pg.evaluate("[...document.querySelectorAll('.ex-badge')].map(x=>x.textContent).sort().join(',')")=='Flickr,Magnific')
         await pg.close()
         # old saved selection of a removed source must not break
         pg=await boot(b,{'pexels':'KEY'})

@@ -1,5 +1,5 @@
 /* Identity explorer: search images / palettes / icons / fonts INSIDE the app and pin results to the project's visual identity.
-   Images come only from well-known stock sites (Pexels / Unsplash / Pixabay / Flickr / Freepik) once you paste your own free key; Iconify and Google Fonts work with no setup;
+   Images come only from well-known stock sites (Pexels / Unsplash / Pixabay / Flickr / Magnific) once you paste your own free key; Iconify and Google Fonts work with no setup;
    Pexels / Unsplash / Pixabay appear when you paste your own free API key in Settings → Connectors. */
 (function(){
 const MSA = window.MSA, U = MSA.u, I = MSA.icon, $ = MSA.$, $$ = MSA.$$;
@@ -37,11 +37,11 @@ const SRC = [
     async get(q, pg){ const j = await fx('https://www.flickr.com/services/rest/?method=flickr.photos.search&api_key=' + enc(keys().flickr) + '&text=' + enc(q) + '&format=json&nojsoncallback=1&per_page=24&page=' + pg + '&safe_search=1&sort=relevance&media=photos&content_type=1&license=1,2,3,4,5,6,9,10&extras=url_m,url_l,url_c,owner_name');
       if (j.stat && j.stat !== 'ok') throw new Error(j.message || 'flickr');
       return ((j.photos && j.photos.photo) || []).filter(x => x.url_m).map(x => ({ id: 'fl' + x.id, thumb: x.url_m, full: x.url_l || x.url_c || x.url_m, title: x.title || '', credit: x.ownername || '', page: 'https://www.flickr.com/photos/' + x.owner + '/' + x.id, src: 'Flickr' })); } },
-  { id: 'freepik', name: 'Freepik', c: '#1273eb', key: true, note: T('فيكتور وصور وPSD — تحتاج مفتاح مجاني', 'Vectors, photos, PSD — free key needed'),
+  { id: 'freepik', name: 'Magnific', c: '#7c3aed', key: true, note: T('(فريبيك سابقًا) فيكتور وصور وPSD — تحتاج مفتاح مجاني', '(formerly Freepik) Vectors, photos, PSD — free key needed'),
     async get(q, pg){
       const qs = '/v1/resources?term=' + enc(q) + '&page=' + pg + '&limit=24&filters%5Blicense%5D%5Bfreemium%5D=1';
       let j; try { j = await fx('https://api.freepik.com' + qs, { headers: { 'x-freepik-api-key': keys().freepik } }); } catch (e) { j = await fx('https://api.magnific.com' + qs, { headers: { 'x-magnific-api-key': keys().freepik } }); }
-      return (j.data || []).filter(x => x.image && x.image.source && x.image.source.url).map(x => ({ id: 'fp' + x.id, thumb: x.image.source.url, full: x.image.source.url, title: x.title || '', credit: (x.author && x.author.name) || '', page: x.url || '', src: 'Freepik' })); } }
+      return (j.data || []).filter(x => x.image && x.image.source && x.image.source.url).map(x => ({ id: 'fp' + x.id, thumb: x.image.source.url, full: x.image.source.url, title: x.title || '', credit: (x.author && x.author.name) || '', page: x.url || '', src: 'Magnific' })); } }
 ];
 const srcOn = s => !conn.state().off[s.id] && (!s.key || (keys()[s.id] || '').trim());
 const chosen = () => { const u = S().ui; let sel = u.exSrc; const av = SRC.filter(srcOn).map(s => s.id); sel = (sel || []).filter(x => av.includes(x)); if (!sel.length) sel = av.slice(0, 1); return sel; };
@@ -115,8 +115,8 @@ function drawBody(){
 }
 const upd = () => { const c = $('#exCnt', cur.root); if (c) c.textContent = countId(cur.p); };
 
-/* ----- famous sites (Pinterest, Behance, Freepik …) ----- */
-const SITE_IDS = ['pinterest', 'behance', 'freepik', 'dribbble', 'artstation', 'unsplash', 'pexels', 'pixabay', 'flickr', 'adobestock', 'shutterstock', 'vecteezy', 'envato', 'awwwards', 'flaticon', 'canva', 'magnific', 'freeimages', 'nohat', 'stockvault', 'freerange', 'logowik', 'iconape', 'pngwing', 'pngegg', 'pngtree', 'arabsstock'];
+/* ----- famous sites (Pinterest, Behance, Magnific …) ----- */
+const SITE_IDS = ['pinterest', 'behance', 'freepik', 'dribbble', 'artstation', 'unsplash', 'pexels', 'pixabay', 'flickr', 'adobestock', 'shutterstock', 'vecteezy', 'envato', 'awwwards', 'flaticon', 'canva', 'freeimages', 'nohat', 'stockvault', 'freerange', 'logowik', 'iconape', 'pngwing', 'pngegg', 'pngtree', 'arabsstock'];
 const isDesk = () => !!(window.msaDesktop && window.msaDesktop.webview);
 const siteList = () => conn.all.filter(x => SITE_IDS.includes(x.id) && !conn.state().off[x.id]);
 const siteHref = (x, q) => x.url(enc(q || ''), {});
@@ -192,7 +192,7 @@ function bodyImages(b){
   b.innerHTML = '<div class="ex-search"><input type="text" dir="auto" data-ex-q value="' + esc(cur.q) + '" placeholder="' + esc(T('اكتب ما تبحث عنه: قهوة فاخرة، خط عربي، تغليف…', 'Search: luxury coffee, arabic calligraphy, packaging…')) + '"><button class="btn primary" data-ex="search">' + I('search', 'sm') + '<span>' + esc(T('بحث', 'Search')) + '</span></button></div>' +
     '<div class="ex-srcs">' + avail.map(s => '<button class="ex-src ' + (sel.includes(s.id) ? 'on' : '') + '" data-ex-src="' + s.id + '" style="--c:' + s.c + '" title="' + esc(s.note) + '"><i></i>' + esc(s.name) + '</button>').join('') +
       (locked.length ? '<span class="ex-lock">' + I('key', 'xs') + esc(T('أضف مفتاح ', 'Add a key for ')) + locked.map(s => s.name).join(' / ') + esc(T(' من الإعدادات ← الموصّلات', ' in Settings → Connectors')) + '</span>' : '') + '</div>' +
-    (avail.length ? '' : '<div class="ex-nokey"><b>' + esc(T('مفيش مصدر صور مفعّل', 'No image source is active')) + '</b><span>' + esc(T('الصور بتيجي من Pexels وUnsplash وPixabay وFlickr وFreepik بعد ما تلصق مفتاحك المجاني (من الإعدادات ← الموصّلات). وفي نفس الوقت تقدر تفتح المواقع دي مباشرة، والصق الصورة أو رابطها هنا:', 'Images come from Pexels, Unsplash, Pixabay, Flickr and Freepik once you paste your free key (Settings → Connectors). Meanwhile open these sites directly, then paste the image or its link here:')) + '</span><div class="row" style="flex-wrap:wrap;gap:6px">' + conn.links('main', cur.q).filter(l => l.id !== 'youtube').map(l => '<button class="cchip" data-open="' + esc(l.url) + '" style="--c:' + l.c + '">' + conn.logo(l) + esc(l.name) + I('external', 'xs') + '</button>').join('') + '</div></div>') +
+    (avail.length ? '' : '<div class="ex-nokey"><b>' + esc(T('مفيش مصدر صور مفعّل', 'No image source is active')) + '</b><span>' + esc(T('الصور بتيجي من Pexels وUnsplash وPixabay وFlickr وMagnific بعد ما تلصق مفتاحك المجاني (من الإعدادات ← الموصّلات). وفي نفس الوقت تقدر تفتح المواقع دي مباشرة، والصق الصورة أو رابطها هنا:', 'Images come from Pexels, Unsplash, Pixabay, Flickr and Magnific once you paste your free key (Settings → Connectors). Meanwhile open these sites directly, then paste the image or its link here:')) + '</span><div class="row" style="flex-wrap:wrap;gap:6px">' + conn.links('main', cur.q).filter(l => l.id !== 'youtube').map(l => '<button class="cchip" data-open="' + esc(l.url) + '" style="--c:' + l.c + '">' + conn.logo(l) + esc(l.name) + I('external', 'xs') + '</button>').join('') + '</div></div>') +
     '<div class="ex-tools"><div class="ex-url"><input type="text" dir="auto" data-ex-url placeholder="' + esc(T('الصق رابط صورة (من Pinterest أو Behance…) أو اضغط Ctrl+V للصق صورة منسوخة', 'Paste an image link (from Pinterest, Behance…) or press Ctrl+V to paste a copied image')) + '"><button class="btn sm" data-ex="addurl">' + I('plus', 'sm') + '<span>' + esc(T('إضافة', 'Add')) + '</span></button></div></div>' +
     '<div id="exRes"></div>';
   drawRes();
@@ -218,7 +218,7 @@ async function run(reset){
   if (reset) { cur.page = 1; cur.items = []; cur.errs = []; cur.searched = true; } else cur.page++;
   cur.busy = true; const tok = cur.tok = (cur.tok || 0) + 1; drawRes();
   const sel = SRC.filter(s => chosen().includes(s.id));
-  if (!sel.length) { cur.busy = false; cur.searched = false; cur.errs = [T('مفيش مصدر صور مفعّل — أضف مفتاح Pexels أو Unsplash أو Pixabay أو Flickr أو Freepik من الإعدادات ← الموصّلات', 'No image source is active — add a Pexels, Unsplash, Pixabay, Flickr or Freepik key in Settings → Connectors')]; drawRes(); return; }
+  if (!sel.length) { cur.busy = false; cur.searched = false; cur.errs = [T('مفيش مصدر صور مفعّل — أضف مفتاح Pexels أو Unsplash أو Pixabay أو Flickr أو Magnific من الإعدادات ← الموصّلات', 'No image source is active — add a Pexels, Unsplash, Pixabay, Flickr or Magnific key in Settings → Connectors')]; drawRes(); return; }
   const res = await Promise.allSettled(sel.map(s => s.get(q, cur.page)));
   if (tok !== cur.tok || !document.body.contains(cur.root)) return;
   const lists = []; cur.more = false;
@@ -402,7 +402,7 @@ const KEYSRC = [
   ['unsplash', 'Unsplash (Access Key)', 'https://unsplash.com/developers', ['سجّل حسابًا ثم افتح «Your apps» ← «New Application»', 'وافق على الشروط وسمِّ التطبيق', 'انسخ «Access Key» (وليس Secret) والصقه هنا'], ['Create an account, open “Your apps” → “New Application”', 'Accept the terms and name the app', 'Copy the “Access Key” (not the Secret) and paste it here']],
   ['pixabay', 'Pixabay', 'https://pixabay.com/api/docs/', ['سجّل حسابًا مجانيًا ثم افتح صفحة الـ API docs وأنت داخل حسابك', 'سيظهر مفتاحك أعلى الصفحة في المثال الأول (key=…)', 'انسخه والصقه هنا'], ['Create a free account, then open the API docs while logged in', 'Your key shows in the first example (key=…)', 'Copy it and paste it here']],
   ['flickr', 'Flickr', 'https://www.flickr.com/services/apps/create/apply/', ['سجّل دخول بحساب Flickr (أو Yahoo) وافتح الرابط', 'اختار «Apply for a Non-Commercial Key» وسمِّ التطبيق واكتب وصفًا بسيطًا', 'انسخ «Key» (وليس Secret) والصقه هنا'], ['Sign in with a Flickr (or Yahoo) account and open the link', 'Choose “Apply for a Non-Commercial Key”, name the app and add a short description', 'Copy the “Key” (not the Secret) and paste it here']],
-  ['freepik', 'Freepik', 'https://www.freepik.com/api', ['افتح الرابط وسجّل حسابًا ثم اطلب مفتاح API من لوحة المطوّرين', 'انسخ المفتاح والصقه هنا', 'الصور اللي بترجع هي الحرّة (Freemium) وبتحتاج إسناد للمصمّم'], ['Open the link, sign up and request an API key from the developer dashboard', 'Copy the key and paste it here', 'Results are the free (Freemium) ones and need author credit']]
+  ['freepik', 'Magnific (Freepik)', 'https://www.magnific.com/api', ['افتح الرابط وسجّل حسابًا ثم اطلب مفتاح API من لوحة المطوّرين', 'انسخ المفتاح والصقه هنا', 'الصور اللي بترجع هي الحرّة (Freemium) وبتحتاج إسناد للمصمّم'], ['Open the link, sign up and request an API key from the developer dashboard', 'Copy the key and paste it here', 'Results are the free (Freemium) ones and need author credit']]
 ];
 MSA.exploreSettingsHTML = function(){
   const k = keys();
@@ -411,7 +411,7 @@ MSA.exploreSettingsHTML = function(){
       '<div class="row"><input type="password" dir="ltr" autocomplete="off" class="grow" data-exkey="' + id + '" value="' + esc(k[id] || '') + '" placeholder="API key"><button class="btn sm" data-open="' + esc(url) + '">' + I('external', 'sm') + '<span>' + esc(T('سجّل واحصل على المفتاح', 'Sign up & get key')) + '</span></button></div>' +
       '<details class="ksteps"><summary>' + esc(T('الخطوات بالتفصيل', 'Step by step')) + '</summary><ol>' + (lang2() === 'en' ? enn : ar).map(s => '<li>' + esc(s) + '</li>').join('') + '</ol></details></div>'; };
   return '<div class="subsec" style="margin-top:12px"><div class="f-title">' + I('search', 'sm') + esc(T('مصادر الهوية البصرية داخل البرنامج', 'In-app visual identity sources')) + '</div>' +
-    '<div class="hint" style="margin-bottom:8px">' + esc(T('الصور من مواقع الستوك المعروفة بس: Pexels وUnsplash وPixabay وFlickr وFreepik (الصق مفتاحك المجاني من الأسفل). وتعمل بدون أي إعداد: Iconify (أيقونات وشعارات ماركات)، وGoogle Fonts وFontsource (خطوط)، وTheColorAPI (أسماء الألوان). المفاتيح تُحفظ على جهازك فقط ولا تدخل النسخ الاحتياطي. Behance وPinterest وFreepik وDribbble لا تسمح بعرض محتواها داخل تطبيقات أخرى، فبتفتح في المتصفح من أزرار المواقع، وانسخ الصورة والصقها (Ctrl+V) داخل المستكشف.', 'Images come only from well-known stock sites: Pexels, Unsplash, Pixabay, Flickr and Freepik (paste your free key below). Work with no setup: Iconify (icons & brand logos), Google Fonts and Fontsource (fonts), TheColorAPI (colour names). Keys stay on this device and are left out of backups. Behance, Pinterest, Freepik and Dribbble do not allow their content inside other apps, so they open in your browser from the site buttons; copy an image there and paste it (Ctrl+V) into the explorer.')) + '</div>' +
+    '<div class="hint" style="margin-bottom:8px">' + esc(T('الصور من مواقع الستوك المعروفة بس: Pexels وUnsplash وPixabay وFlickr وMagnific (الصق مفتاحك المجاني من الأسفل). وتعمل بدون أي إعداد: Iconify (أيقونات وشعارات ماركات)، وGoogle Fonts وFontsource (خطوط)، وTheColorAPI (أسماء الألوان). المفاتيح تُحفظ على جهازك فقط ولا تدخل النسخ الاحتياطي. Behance وPinterest وMagnific وDribbble لا تسمح بعرض محتواها داخل تطبيقات أخرى، فبتفتح في المتصفح من أزرار المواقع، وانسخ الصورة والصقها (Ctrl+V) داخل المستكشف.', 'Images come only from well-known stock sites: Pexels, Unsplash, Pixabay, Flickr and Magnific (paste your free key below). Work with no setup: Iconify (icons & brand logos), Google Fonts and Fontsource (fonts), TheColorAPI (colour names). Keys stay on this device and are left out of backups. Behance, Pinterest, Magnific and Dribbble do not allow their content inside other apps, so they open in your browser from the site buttons; copy an image there and paste it (Ctrl+V) into the explorer.')) + '</div>' +
     KEYSRC.map(row).join('') + '</div>';
 };
 const lang2 = () => (S().settings.lang === 'en' ? 'en' : 'ar');

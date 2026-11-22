@@ -18,7 +18,7 @@ const LINKS = [
   { id: 'adobefonts', name: 'Adobe Fonts', c: '#fa0f00', sc: ['fonts', 'logo'], url: () => 'https://fonts.adobe.com/' },
   { id: 'flaticon', name: 'Flaticon', c: '#0aa5f5', sc: ['icons'], url: q => 'https://www.flaticon.com/search?word=' + q },
   { id: 'noun', name: 'The Noun Project', c: '#1d1d1d', sc: ['icons'], url: q => 'https://thenounproject.com/search/icons/?q=' + q },
-  { id: 'freepik', name: 'Freepik', c: '#1273eb', sc: ['icons', 'imagestyle', 'templates', 'mockups', 'main'], url: q => 'https://www.freepik.com/search?query=' + q },
+  { id: 'freepik', name: 'Magnific', c: '#7c3aed', sc: ['icons', 'imagestyle', 'templates', 'mockups', 'main'], url: q => 'https://www.freepik.com/search?query=' + q },
   { id: 'canva', name: 'Canva', c: '#00c4cc', sc: ['templates', 'static', 'main'], url: q => 'https://www.canva.com/templates/?query=' + q },
   { id: 'pixabay', name: 'Pixabay', c: '#2ec66d', sc: ['mood', 'imagestyle', 'icons'], url: q => 'https://pixabay.com/images/search/' + q + '/' },
   { id: 'flickr', name: 'Flickr', c: '#ff0084', sc: ['mood', 'imagestyle'], url: q => 'https://www.flickr.com/search/?text=' + q },
@@ -27,17 +27,16 @@ const LINKS = [
   { id: 'shutterstock', name: 'Shutterstock', c: '#ee2b24', sc: ['imagestyle', 'mockups'], url: q => 'https://www.shutterstock.com/search/' + q.replace(/%20/g, '-') },
   { id: 'vecteezy', name: 'Vecteezy', c: '#fe6e00', sc: ['icons', 'imagestyle', 'templates', 'mockups'], url: q => 'https://www.vecteezy.com/free-vector/' + q.replace(/%20/g, '-') },
   { id: 'envato', name: 'Envato Elements', c: '#82b541', sc: ['templates', 'mockups', 'motion'], url: q => 'https://elements.envato.com/all-items/' + q.replace(/%20/g, '-') },
-  { id: 'magnific', name: 'Magnific', c: '#7c3aed', sc: ['imagestyle', 'mockups', 'main'], url: () => 'https://magnific.ai/' },
   { id: 'freeimages', name: 'Freeimages', c: '#f26522', sc: ['mood', 'imagestyle'], url: q => 'https://www.freeimages.com/search/' + q.replace(/%20/g, '-') },
-  { id: 'nohat', name: 'Nohat', c: '#f5c400', sc: ['icons', 'imagestyle', 'logo'], url: q => 'https://www.nohat.cc/search?q=' + q },
+  { id: 'nohat', name: 'Nohat', c: '#f5c400', sc: ['icons', 'imagestyle', 'logo'], url: q => 'https://nohat.cc/s/' + q.replace(/%20/g, '-') + '-png' },
   { id: 'stockvault', name: 'Stockvault', c: '#2f80ed', sc: ['mood', 'imagestyle', 'mockups'], url: q => 'https://www.stockvault.net/free-photos/' + q.replace(/%20/g, '-') + '/' },
-  { id: 'freerange', name: 'Freerange', c: '#e0342b', sc: ['mood', 'imagestyle'], url: q => 'https://freerangestock.com/search.php?search=' + q },
+  { id: 'freerange', name: 'Freerange', c: '#e0342b', sc: ['mood', 'imagestyle'], url: q => 'https://freerangestock.com/search/all/' + q.replace(/%20/g, '-') },
   { id: 'logowik', name: 'Logowik', c: '#d62828', sc: ['logo', 'icons', 'identity'], url: q => 'https://logowik.com/?s=' + q },
   { id: 'iconape', name: 'Icon APE', c: '#2ecc9a', sc: ['icons', 'logo'], url: q => 'https://iconape.com/?s=' + q },
   { id: 'pngwing', name: 'PNGWing', c: '#1d6fb8', sc: ['icons', 'imagestyle', 'mockups'], url: q => 'https://www.pngwing.com/en/search?q=' + q },
   { id: 'pngegg', name: 'PNGEgg', c: '#e91e63', sc: ['icons', 'imagestyle', 'mockups'], url: q => 'https://www.pngegg.com/en/search?q=' + q },
   { id: 'pngtree', name: 'PngTree', c: '#27ae60', sc: ['icons', 'imagestyle', 'templates', 'mockups'], url: q => 'https://pngtree.com/so/' + q.replace(/%20/g, '-') },
-  { id: 'arabsstock', name: 'Arabsstock', c: '#1e3a5f', sc: ['imagestyle', 'templates', 'mockups'], url: q => 'https://arabsstock.com/en/search?q=' + q },
+  { id: 'arabsstock', name: 'Arabsstock', c: '#1e3a5f', sc: ['imagestyle', 'templates', 'mockups'], url: q => 'https://arabsstock.com/en/photos/tags/' + q },
   { id: 'awwwards', name: 'Awwwards', c: '#222222', sc: ['idea', 'mood'], url: q => 'https://www.awwwards.com/websites/?text=' + q },
   { id: 'youtube', name: 'YouTube', c: '#ff0000', sc: ['*'], url: q => 'https://www.youtube.com/results?search_query=' + q + '%20tutorial' }
 ];
@@ -66,8 +65,8 @@ const conn = MSA.conn = {
 };
 
 /* ---------- brand badges: coloured tile + glyph; the site's real favicon loads over it when online ---------- */
-const GL = { behance: 'Bē', pinterest: 'P', dribbble: '◉', unsplash: 'U', pexels: 'Px', colorhunt: 'CH', coolors: 'Co', gfonts: 'Aa', adobefonts: 'Af', flaticon: 'Fi', noun: 'N', freepik: 'Fr', canva: 'Ca', youtube: '▶' };
-const DOM = { behance: 'behance.net', pinterest: 'pinterest.com', dribbble: 'dribbble.com', unsplash: 'unsplash.com', pexels: 'pexels.com', colorhunt: 'colorhunt.co', coolors: 'coolors.co', gfonts: 'fonts.google.com', adobefonts: 'fonts.adobe.com', flaticon: 'flaticon.com', noun: 'thenounproject.com', freepik: 'freepik.com', canva: 'canva.com', youtube: 'youtube.com' };
+const GL = { behance: 'Bē', pinterest: 'P', dribbble: '◉', unsplash: 'U', pexels: 'Px', colorhunt: 'CH', coolors: 'Co', gfonts: 'Aa', adobefonts: 'Af', flaticon: 'Fi', noun: 'N', freepik: 'Mg', canva: 'Ca', youtube: '▶' };
+const DOM = { behance: 'behance.net', pinterest: 'pinterest.com', dribbble: 'dribbble.com', unsplash: 'unsplash.com', pexels: 'pexels.com', colorhunt: 'colorhunt.co', coolors: 'coolors.co', gfonts: 'fonts.google.com', adobefonts: 'fonts.adobe.com', flaticon: 'flaticon.com', noun: 'thenounproject.com', freepik: 'magnific.com', canva: 'canva.com', youtube: 'youtube.com' };
 MSA.conn.logo = function(x){
   let dom = DOM[x.id]; if (!dom && x.url) { try { dom = new URL(x.url.replace('{q}', 'x')).hostname; } catch (e) {} }
   const col = x.c || '#8a8a86', gl = GL[x.id] || (x.name || '?').trim().charAt(0).toUpperCase();

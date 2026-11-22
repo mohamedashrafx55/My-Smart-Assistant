@@ -8,7 +8,7 @@ async def main():
         ok('entries newest-first by date', await pg.evaluate("(()=>{const d=MSA.changelog.entries.map(x=>x.d);return d.every((x,i)=>i==0||d[i-1]>=x)})()"))
         ok('every entry has AR+EN title and bullets', await pg.evaluate("MSA.changelog.entries.every(e=>e.t[0]&&e.t[1]&&e.b.length&&e.b.every(b=>b[0]&&b[1]))"))
         ok('build numbers strictly descending per platform, no duplicates', await pg.evaluate("""(()=>{for(const k of ['a','w']){const v=MSA.changelog.entries.map(e=>e[k]).filter(Boolean);for(let i=1;i<v.length;i++)if(v[i]>=v[i-1])return false}return true})()"""))
-        ok('latest Android and Windows builds are listed', await pg.evaluate("MSA.changelog.latestOf('android')>=42&&MSA.changelog.latestOf('windows')>=41"))
+        ok('latest Android and Windows builds are listed', await pg.evaluate("MSA.changelog.latestOf('android')>=43&&MSA.changelog.latestOf('windows')>=42"))
         ok('no gaps in Android 4..latest', await pg.evaluate("(()=>{const s=new Set(MSA.changelog.entries.map(e=>e.a));for(let i=4;i<=MSA.changelog.latestOf('android');i++)if(!s.has(i))return false;return true})()"))
         ok('no gaps in Windows 4..latest', await pg.evaluate("(()=>{const s=new Set(MSA.changelog.entries.map(e=>e.w));for(let i=4;i<=MSA.changelog.latestOf('windows');i++)if(!s.has(i))return false;return true})()"))
         # settings section

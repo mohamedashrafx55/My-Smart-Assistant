@@ -20,7 +20,7 @@ const BUILT = [
   ['fontshare', 'Fontshare', 'https://www.fontshare.com/', 'font', '#111111'], ['dafont', 'DaFont', 'https://www.dafont.com/', 'font', '#3b6ea5'],
   ['whatfont', 'MyFonts WhatTheFont', 'https://www.myfonts.com/pages/whatthefont', 'font', '#e5322d'],
   ['flaticon', 'Flaticon', 'https://www.flaticon.com/', 'icon', '#0aa5f5'], ['noun', 'The Noun Project', 'https://thenounproject.com/', 'icon', '#1d1d1d'],
-  ['freepik', 'Freepik', 'https://www.freepik.com/', 'icon', '#1273eb'], ['iconscout', 'IconScout', 'https://iconscout.com/', 'icon', '#1e6cff'],
+  ['freepik', 'Magnific', 'https://www.magnific.com/', 'icon', '#7c3aed'], ['iconscout', 'IconScout', 'https://iconscout.com/', 'icon', '#1e6cff'],
   ['icons8', 'Icons8', 'https://icons8.com/', 'icon', '#1fb141'], ['lottiefiles', 'LottieFiles', 'https://lottiefiles.com/', 'icon', '#00ddb3'],
   ['canva', 'Canva', 'https://www.canva.com/', 'mock', '#00c4cc'], ['figmacom', 'Figma Community', 'https://www.figma.com/community', 'mock', '#f24e1e'],
   ['mockupworld', 'Mockup World', 'https://www.mockupworld.co/', 'mock', '#222222'], ['graphicburger', 'GraphicBurger', 'https://graphicburger.com/', 'mock', '#f37021'],

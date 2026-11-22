@@ -61,11 +61,11 @@ function open(proj, step){
     '<div class="bd-title" dir="auto">' + esc(proj.name) + ' · ' + esc(MSA.proj.title(step)) + '</div><div class="bd-sp"></div>' +
     '<div class="bd-tools">' + b('add', 'plus', T('إضافة صور', 'Add images')) + b('text', 'heading', T('نص', 'Text')) + '<i class="bd-sep"></i>' +
     b('tool', 'pin', T('وضع اليد', 'Hand tool'), 'tool') + b('arrange', 'grid', T('ترتيب', 'Arrange')) + '<i class="bd-sep"></i>' +
-    b('flipH', 'repeat', T('قلب أفقي', 'Flip horizontal')) + b('flipV', 'repeat', T('قلب رأسي', 'Flip vertical'), 'v') + b('gray', 'eye', T('أبيض وأسود', 'Greyscale')) + b('crop', 'scissors', T('قص', 'Crop')) + b('lock', 'lock', T('تثبيت', 'Lock')) + '<i class="bd-sep"></i>' +
+    b('flipH', 'repeat', T('قلب أفقي', 'Flip horizontal')) + b('flipV', 'repeat', T('قلب رأسي', 'Flip vertical'), 'v') + b('gray', 'eye', T('أبيض وأسود', 'Greyscale')) + b('crop', 'scissors', T('قص', 'Crop')) + b('lock', 'lock', T('تثبيت', 'Lock')) + b('note', 'pencil', T('ملاحظة', 'Note')) + '<i class="bd-sep"></i>' +
     b('dup', 'copy', T('تكرار', 'Duplicate')) + b('del', 'trash', T('حذف', 'Delete'), 'danger') + b('undo', 'undo', T('تراجع', 'Undo')) + b('redo', 'undo', T('إعادة', 'Redo'), 'redo') + '<i class="bd-sep"></i>' +
     b('fit', 'maximize', T('عرض الكل', 'Fit all')) + b('bg', 'palette', T('الخلفية', 'Background')) + b('export', 'download', T('تصدير', 'Export')) + b('help', 'info', T('اختصارات', 'Shortcuts')) + '</div></div>' +
     '<div class="bd-stage" id="bdStage" tabindex="0"><div class="bd-world" id="bdWorld"><div id="bdItems"></div><div id="bdSel"></div></div>' +
-    '<div class="bd-marq" id="bdMarq" hidden></div>' +
+    '<div class="bd-marq" id="bdMarq" hidden></div><button class="bd-note" id="bdNote" type="button" hidden></button>' +
     '<div class="bd-empty" id="bdEmpty" hidden><div>' + I('image') + '</div><b>' + esc(T('المود بورد فاضي', 'The board is empty')) + '</b><span>' + esc(T('اسحب صورًا هنا، أو الصق (Ctrl+V)، أو اضغط «إضافة صور».', 'Drop images here, paste (Ctrl+V), or press “Add images”.')) + '</span></div>' +
     '<div class="bd-drop" id="bdDrop" hidden>' + esc(T('أفلت الصور هنا', 'Drop images here')) + '</div></div>' +
     '<div class="bd-status" id="bdStat"></div>';
@@ -118,6 +118,7 @@ function open(proj, step){
     e.style.transform = it.r ? 'rotate(' + it.r + 'deg)' : ''; e.style.zIndex = it.z || 0;
     inn.style.transform = (it.fx || it.fy) ? 'scale(' + (it.fx ? -1 : 1) + ',' + (it.fy ? -1 : 1) + ')' : '';
     e.classList.toggle('lk', !!it.lock); e.classList.toggle('cropping', cropId === it.id);
+    let nb = e.querySelector(':scope > .bi-nb'); if (it.note) { if (!nb) { nb = document.createElement('i'); nb.className = 'bi-nb'; e.appendChild(nb); } nb.dataset.note = it.note; nb.textContent = '✎'; } else if (nb) nb.remove();
     if (it.t === 'txt') { const t = $('.bi-t', e); t.style.fontSize = it.fs + 'px'; t.style.color = it.col; if (t.textContent !== it.txt && document.activeElement !== t) t.textContent = it.txt; }
     else {
       const c = it.crop || [0, 0, 0, 0], fw = 1 - c[0] - c[2], fh = 1 - c[1] - c[3], FW = it.w / fw, FH = it.h / fh;
@@ -167,6 +168,7 @@ function open(proj, step){
     const set = (c, on, dis) => { const el = $('[data-c=' + c + ']', root); if (!el) return; el.classList.toggle('on', !!on); el.disabled = !!dis; };
     set('undo', 0, !undo.length); set('redo', 0, !redo.length); set('dup', 0, !any); set('del', 0, !any);
     set('flipH', 0, !any); set('flipV', 0, !any); set('gray', any ? s.every(i => i.gray) : B.gray, 0);
+    set('note', s.length && s.every(i => i.note), !any); noteStrip(s);
     set('crop', cropId, !(one && s[0].t === 'img')); set('lock', any && s.every(i => i.lock), !any); set('tool', tool === 'hand', 0);
     const tb = $('[data-c=tool] span', root); if (tb) tb.textContent = tool === 'hand' ? T('وضع اليد', 'Hand tool') : T('وضع التحديد', 'Select tool');
     stage.style.cursor = tool === 'hand' ? 'grab' : 'default';
@@ -222,6 +224,16 @@ function open(proj, step){
   const unlocked = () => sels().filter(i => !i.lock);
   function flip(axis){ change(i => { if (i.lock) return; i[axis] = i[axis] ? 0 : 1; }); }
   function toGray(){ const s = sels(); if (!s.length) { pushHist(); B.gray = !B.gray; commit(); return; } const on = !s.every(i => i.gray); change(i => { i.gray = on ? 1 : 0; }); }
+  function noteStrip(s){ const n = $('#bdNote', root); if (!n) return; const it = s.length === 1 ? s[0] : null; if (it && it.note) { n.hidden = false; n.textContent = ''; const b = document.createElement('b'); b.textContent = T('ملاحظتي: ', 'My note: '); const sp = document.createElement('span'); sp.textContent = it.note; sp.dir = 'auto'; n.append(b, sp); } else { n.hidden = true; n.textContent = ''; } }
+  async function noteEdit(){
+    const s = sels(); if (!s.length) { MSA.toast(T('حدّد عنصر الأول عشان تكتب عليه ملاحظة', 'Select an item first to add a note'), 'warn'); return; }
+    const first = s[0].note || '', same = s.every(i => (i.note || '') === first);
+    const v = await MSA.ask({ title: s.length > 1 ? T('ملاحظة على ' + s.length + ' عناصر', 'Note on ' + s.length + ' items') : T('ملاحظة على العنصر', 'Note on this item'), label: T('إيه اللي عجبك فيه؟ (سيبها فاضية لو عايز تمسحها)', 'What do you like about it? (leave empty to remove)'), placeholder: T('مثال: توزيع الألوان / الخط / الإضاءة…', 'e.g. colour balance / typography / lighting…'), multiline: true, required: false, value: same ? first : '', okLabel: T('حفظ الملاحظة', 'Save note') });
+    if (v === null || v === undefined) return;
+    const ids = new Set(s.map(i => i.id)); if (!items.some(i => ids.has(i.id))) return;
+    change(i => { if (v) i.note = v.slice(0, 1000); else delete i.note; });
+    MSA.toast(v ? T('اتحفظت الملاحظة', 'Note saved') : T('اتمسحت الملاحظة', 'Note removed'), 'ok', 1100);
+  }
   function lockToggle(){ const s = sels(); if (!s.length) return; const on = !s.every(i => i.lock); change(i => { i.lock = on ? 1 : 0; }); }
   function zorder(front){ pushHist(); sels().sort((a, b) => a.z - b.z).forEach(i => { i.z = front ? nextZ() : minZ(); }); commit(); }
   function resetSize(){ change(i => { if (i.lock || i.t !== 'img') return; const c = ctr(i), cr = i.crop || [0, 0, 0, 0]; i.w = i.nw * (1 - cr[0] - cr[2]); i.h = i.nh * (1 - cr[1] - cr[3]); setCenter(i, c.x, c.y); }); }
@@ -282,7 +294,7 @@ function open(proj, step){
   const ptrs = new Map(); let drag = null, pinch = null, lpTimer = 0, lastTap = { t: 0, x: 0, y: 0 };
   const hitItem = tg => { const e = tg.closest && tg.closest('.bitem'); return e && root.contains(e) ? itemOf(e.dataset.id) : null; };
   stage.addEventListener('pointerdown', e => {
-    if (e.target.closest('.bitem.editing')) return;
+    if (e.target.closest('.bitem.editing') || e.target.closest('.bd-note')) return;
     stage.focus({ preventScroll: true }); MSA.closeCtx && MSA.closeCtx();
     lastPt = e.pointerType || 'mouse'; ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { stage.setPointerCapture(e.pointerId); } catch (x) {}
@@ -462,7 +474,7 @@ function open(proj, step){
       L.push({ icon: 'copy', label: T('نسخ', 'Copy') + '  Ctrl+C', onClick: () => copySel(false) }, { icon: 'scissors', label: T('قص', 'Cut') + '  Ctrl+X', onClick: () => copySel(true) }, { icon: 'copy', label: T('تكرار', 'Duplicate') + '  Ctrl+D', onClick: () => dupSel() });
       if (clip) L.push({ icon: 'paste', label: T('لصق', 'Paste') + '  Ctrl+V', onClick: pasteInternal });
       L.push('-', { icon: 'repeat', label: T('قلب أفقي', 'Flip horizontal') + '  Shift+H', onClick: () => flip('fx') }, { icon: 'repeat', label: T('قلب رأسي', 'Flip vertical') + '  Shift+V', onClick: () => flip('fy') },
-        { icon: 'eye', label: T('أبيض وأسود', 'Greyscale') + '  G', onClick: toGray }, { icon: 'lock', label: T('تثبيت / فك التثبيت', 'Lock / unlock') + '  L', onClick: lockToggle });
+        { icon: 'eye', label: T('أبيض وأسود', 'Greyscale') + '  G', onClick: toGray }, { icon: 'lock', label: T('تثبيت / فك التثبيت', 'Lock / unlock') + '  L', onClick: lockToggle }, { icon: 'pencil', label: T('ملاحظة…', 'Note…') + '  N', onClick: noteEdit });
       if (one && s[0].t === 'img') L.push({ icon: 'scissors', label: T('قص', 'Crop') + '  C', onClick: startCrop }, { icon: 'undo', label: T('إلغاء القص', 'Reset crop'), onClick: resetCrop });
       L.push({ icon: 'maximize', label: T('الحجم الأصلي', 'Original size') + '  Ctrl+1', onClick: resetSize }, { icon: 'undo', label: T('تصفير الدوران', 'Reset rotation'), onClick: resetRot }, '-',
         { icon: 'chev-u', label: T('للأمام', 'Bring to front') + '  PgUp', onClick: () => zorder(true) }, { icon: 'chev-d', label: T('للخلف', 'Send to back') + '  PgDn', onClick: () => zorder(false) },
@@ -481,7 +493,7 @@ function open(proj, step){
       ['سحب على الفراغ', 'Drag on empty space', 'تحديد متعدد', 'Marquee select'], ['Shift / Ctrl + ضغط', 'Shift / Ctrl + click', 'إضافة للتحديد', 'Add to selection'], ['Ctrl+A', 'Ctrl+A', 'تحديد الكل', 'Select all'],
       ['Ctrl+V', 'Ctrl+V', 'لصق صورة أو نص', 'Paste image or text'], ['سحب ملفات', 'Drop files', 'إضافة صور', 'Add images'], ['ضغطتين على صورة', 'Double-click image', 'تركيز عليها', 'Focus on it'], ['ضغطتين على الفراغ', 'Double-click empty', 'نص جديد', 'New text'],
       ['Shift أثناء السحب', 'Shift while dragging', 'اتجاه واحد', 'Constrain axis'], ['Shift أثناء التدوير', 'Shift while rotating', 'خطوات 15°', 'Snap 15°'], ['الأسهم', 'Arrow keys', 'تحريك دقيق (Shift أكبر)', 'Nudge (Shift = more)'],
-      ['Shift+H / Shift+V', 'Shift+H / Shift+V', 'قلب', 'Flip'], ['G', 'G', 'أبيض وأسود', 'Greyscale'], ['C', 'C', 'قص', 'Crop'], ['L', 'L', 'تثبيت', 'Lock'], ['Ctrl+D', 'Ctrl+D', 'تكرار', 'Duplicate'],
+      ['Shift+H / Shift+V', 'Shift+H / Shift+V', 'قلب', 'Flip'], ['G', 'G', 'أبيض وأسود', 'Greyscale'], ['C', 'C', 'قص', 'Crop'], ['L', 'L', 'تثبيت', 'Lock'], ['N', 'N', 'ملاحظة على العنصر', 'Note on item'], ['Ctrl+D', 'Ctrl+D', 'تكرار', 'Duplicate'],
       ['PageUp / PageDown', 'PageUp / PageDown', 'للأمام / للخلف', 'Front / back'], ['Ctrl+1', 'Ctrl+1', 'الحجم الأصلي', 'Original size'], ['F', 'F', 'عرض الكل أو المحدد', 'Fit all / selection'], ['Ctrl+Z / Ctrl+Y', 'Ctrl+Z / Ctrl+Y', 'تراجع / إعادة', 'Undo / redo'], ['Delete', 'Delete', 'حذف', 'Delete'], ['Esc', 'Esc', 'إلغاء التحديد ثم إغلاق', 'Deselect, then close'], ['كليك يمين', 'Right-click', 'كل الأوامر', 'All commands']];
     MSA.modal({ title: T('اختصارات المود بورد', 'Moodboard shortcuts'), size: 'wide', footer: false, body: '<div class="bd-help">' + rows.map(r => '<div><kbd dir="ltr">' + esc(T(r[0], r[1])) + '</kbd><span>' + esc(T(r[2], r[3])) + '</span></div>').join('') + '</div><p class="hint">' + esc(T('على الموبايل والتابلت: اسحب بإصبع للتحريك، إصبعين للتكبير، اضغط مطولًا للقائمة.', 'On phones and tablets: one finger pans, two fingers zoom, long-press for the menu.')) + '</p>' });
   }
@@ -495,12 +507,13 @@ function open(proj, step){
       case 'arrange': return arrangeMenu(r.left, r.bottom + 4);
       case 'flipH': return flip('fx'); case 'flipV': return flip('fy'); case 'gray': return toGray();
       case 'crop': return cropId ? endCrop() : startCrop();
-      case 'lock': return lockToggle(); case 'dup': return dupSel(); case 'del': return removeAsk([...sel]);
+      case 'note': return noteEdit(); case 'lock': return lockToggle(); case 'dup': return dupSel(); case 'del': return removeAsk([...sel]);
       case 'undo': return doUndo(); case 'redo': return doRedo();
       case 'fit': return fitTo(sels().length ? sels() : items, 1.5);
       case 'bg': return bgMenu(r.left, r.bottom + 4); case 'export': return exportMenu(r.left, r.bottom + 4); case 'help': return help();
     }
   }
+  $('#bdNote', root).addEventListener('click', () => noteEdit());
   root.addEventListener('click', e => { const bt = e.target.closest('[data-c]'); if (bt && root.contains(bt)) cmd(bt.dataset.c, bt); });
   const typing = e => { const t = e.target; return t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable); };
   const onKey = e => {
@@ -520,7 +533,7 @@ function open(proj, step){
     if (mod) return;
     if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeAsk([...sel]); return; }
     if (st && k === 'h') { e.preventDefault(); flip('fx'); return; } if (st && k === 'v') { e.preventDefault(); flip('fy'); return; }
-    if (!st && k === 'g') { toGray(); return; } if (k === 'c' && !st) { cropId ? endCrop() : startCrop(); return; } if (k === 'l') { lockToggle(); return; } if (k === 'f') { fitTo(sels().length ? sels() : items, 1.5); return; } if (k === 't' && !st) { e.preventDefault(); addText(); return; }
+    if (!st && k === 'g') { toGray(); return; } if (k === 'c' && !st) { cropId ? endCrop() : startCrop(); return; } if (k === 'l') { lockToggle(); return; } if (k === 'n' && !st && !e.ctrlKey && !e.metaKey) { e.preventDefault(); noteEdit(); return; } if (k === 'f') { fitTo(sels().length ? sels() : items, 1.5); return; } if (k === 't' && !st) { e.preventDefault(); addText(); return; }
     if (e.key === 'PageUp') { e.preventDefault(); zorder(true); return; } if (e.key === 'PageDown') { e.preventDefault(); zorder(false); return; }
     const step_ = st ? 20 : 2; if (e.key.indexOf('Arrow') === 0 && sel.size) { e.preventDefault(); nudge(e.key === 'ArrowLeft' ? -step_ : e.key === 'ArrowRight' ? step_ : 0, e.key === 'ArrowUp' ? -step_ : e.key === 'ArrowDown' ? step_ : 0); }
   };
