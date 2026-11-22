@@ -112,15 +112,41 @@ jobs:
           /* embedded sites browser (Pinterest, Behance, Freepik …): hardened <webview> + right-click "Pin to my identity" */
           const AR = /^ar/i.test(app.getLocale());
           const L = (ar, en) => (AR ? ar : en);
+          function sendBuf(contents, src, buf, mime) {
+            if (!buf || !buf.length || buf.length > 15 * 1024 * 1024 || !win || win.isDestroyed()) return;
+            let thumb = '';
+            if (!/^https?:/i.test(src || '')) { try { const im = nativeImage.createFromBuffer(buf); const sz = im.getSize(); thumb = 'data:image/jpeg;base64,' + (sz.width > 480 ? im.resize({ width: 480 }) : im).toJPEG(72).toString('base64'); } catch (e) {} }
+            win.webContents.send('msa-web-image', { src: /^https?:/i.test(src || '') ? src : '', thumb, page: contents.getURL(), mime: mime || '', b64: buf.toString('base64') });
+          }
           async function sendWebImage(contents, src) {
             try {
-              if (!/^https?:/i.test(src || '') || !win || win.isDestroyed()) return;
+              if (!win || win.isDestroyed()) return;
+              if (/^data:image\//i.test(src || '')) { const m = /^data:([^;,]+)[^,]*;base64,(.*)$/i.exec(src); if (m) sendBuf(contents, src, Buffer.from(m[2], 'base64'), m[1]); return; }
+              if (!/^https?:/i.test(src || '')) return;
               const res = await net.fetch(src, { headers: { Referer: contents.getURL() } });
               if (!res.ok) return;
-              const buf = Buffer.from(await res.arrayBuffer());
-              if (!buf.length || buf.length > 15 * 1024 * 1024) return;
-              win.webContents.send('msa-web-image', { src, page: contents.getURL(), mime: res.headers.get('content-type') || '', b64: buf.toString('base64') });
+              sendBuf(contents, src, Buffer.from(await res.arrayBuffer()), res.headers.get('content-type') || '');
             } catch (e) {}
+          }
+          /* find the picture under the cursor even when the site hides it: overlays, CSS backgrounds, <picture>, video posters, svg, canvas, blob: images */
+          const PROBE = (x, y) => `(async function(x,y){
+            function abs(u){try{return new URL(u,location.href).href}catch(e){return ''}}
+            function bg(el){var b=getComputedStyle(el).backgroundImage||'';var m=/url\\(["']?(.*?)["']?\\)/.exec(b);return m?abs(m[1]):''}
+            async function toData(u){try{if(!/^blob:/i.test(u))return u;var r=await fetch(u);var b=await r.blob();return await new Promise(function(ok){var f=new FileReader();f.onload=function(){ok(f.result)};f.readAsDataURL(b)})}catch(e){return ''}}
+            var els=document.elementsFromPoint(x,y)||[];
+            for(var i=0;i<els.length;i++){var el=els[i],u='';
+              if(el.tagName==='IMG')u=el.currentSrc||el.src;
+              else if(el.tagName==='VIDEO')u=el.poster||'';
+              else if(el.tagName==='IMAGE'||el.tagName==='image')u=el.getAttribute('href')||el.getAttribute('xlink:href')||'';
+              else if(el.tagName==='CANVAS'){try{u=el.toDataURL('image/png')}catch(e){u=''}}
+              else if(el.tagName==='PICTURE'){var im=el.querySelector('img');u=im?(im.currentSrc||im.src):''}
+              if(!u)u=bg(el);
+              if(!u){var near=el.querySelector&&el.querySelector('img');if(near&&near.getBoundingClientRect){var r=near.getBoundingClientRect();if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)u=near.currentSrc||near.src}}
+              if(u&&!/^(javascript|about):/i.test(u)){u=abs(u)||u;u=await toData(u);if(u)return u}
+            }
+            return ''})(${Math.round(x)},${Math.round(y)})`;
+          async function pageShot(contents) {
+            try { const im = await contents.capturePage(); if (win && !win.isDestroyed()) sendBuf(contents, '', im.toPNG(), 'image/png'); } catch (e) {}
           }
           app.on('web-contents-created', (_e, contents) => {
             if (contents.getType() === 'webview') {
@@ -132,12 +158,19 @@ jobs:
                 if (/^https?:/i.test(url)) contents.loadURL(url);
                 return { action: 'deny' };
               });
-              contents.on('context-menu', (_ev, params) => {
+              contents.on('context-menu', async (_ev, params) => {
                 const items = [];
-                if (params.mediaType === 'image' && params.srcURL) {
-                  items.push({ label: L('تثبيت في هويتي', 'Pin to my identity'), click: () => sendWebImage(contents, params.srcURL) });
-                  items.push({ label: L('نسخ الصورة', 'Copy image'), click: () => contents.copyImageAt(params.x, params.y) });
-                  items.push({ label: L('نسخ رابط الصورة', 'Copy image address'), click: () => require('electron').clipboard.writeText(params.srcURL) });
+                let img = (params.mediaType === 'image' && params.srcURL) ? params.srcURL : '';
+                if (!img) { try { img = await contents.executeJavaScript(PROBE(params.x, params.y)); } catch (e) { img = ''; } }
+                if (img) {
+                  items.push({ label: L('تثبيت في هويتي', 'Pin to my identity'), click: () => sendWebImage(contents, img) });
+                  if (/^https?:/i.test(img)) {
+                    items.push({ label: L('نسخ الصورة', 'Copy image'), click: () => { if (params.mediaType === 'image') contents.copyImageAt(params.x, params.y); else net.fetch(img, { headers: { Referer: contents.getURL() } }).then(r => r.arrayBuffer()).then(b => require('electron').clipboard.writeImage(nativeImage.createFromBuffer(Buffer.from(b)))).catch(() => {}); } });
+                    items.push({ label: L('نسخ رابط الصورة', 'Copy image address'), click: () => require('electron').clipboard.writeText(img) });
+                  }
+                  items.push({ type: 'separator' });
+                } else {
+                  items.push({ label: L('تثبيت لقطة من الصفحة في هويتي', 'Pin a screenshot of this page'), click: () => pageShot(contents) });
                   items.push({ type: 'separator' });
                 }
                 if (params.linkURL && /^https?:/i.test(params.linkURL)) items.push({ label: L('نسخ رابط الصفحة', 'Copy link address'), click: () => require('electron').clipboard.writeText(params.linkURL) });

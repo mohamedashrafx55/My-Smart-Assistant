@@ -181,7 +181,7 @@ if (window.msaDesktop && window.msaDesktop.onWebImage) window.msaDesktop.onWebIm
     let host = ''; try { host = new URL(d.page || d.src).hostname.replace(/^www\./, ''); } catch (e) {}
     const st = targetStep(); let where = '';
     if (st) { const a = await MSA.files.put(new File([u8], 'web-' + Date.now() + '.' + ext, { type: mime })); a.kind = 'image'; st.atts.push(a); MSA.save(); MSA.updateCounts && MSA.updateCounts(); where = P.title(st); }
-    pinTo('image', { thumb: d.src, full: d.src, title: '', credit: host, page: d.page || '', src: host || 'web' });
+    pinTo('image', { thumb: d.thumb || d.src, full: d.src || d.thumb, title: '', credit: host, page: d.page || '', src: host || 'web' });
     MSA.toast(where ? T('تم التثبيت في الهوية وحفظ الصورة في «' + where + '»', 'Pinned to the identity and saved to “' + where + '”') : T('تم التثبيت في الهوية', 'Pinned to the identity'), 'ok');
   } catch (e) { MSA.toast(T('تعذّر حفظ الصورة', 'Could not save the image'), 'err'); }
 });
