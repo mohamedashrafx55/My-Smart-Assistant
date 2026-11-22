@@ -116,7 +116,7 @@ function drawBody(){
 const upd = () => { const c = $('#exCnt', cur.root); if (c) c.textContent = countId(cur.p); };
 
 /* ----- famous sites (Pinterest, Behance, Freepik …) ----- */
-const SITE_IDS = ['pinterest', 'behance', 'freepik', 'dribbble', 'artstation', 'unsplash', 'pexels', 'pixabay', 'flickr', 'adobestock', 'shutterstock', 'vecteezy', 'envato', 'awwwards', 'flaticon', 'canva'];
+const SITE_IDS = ['pinterest', 'behance', 'freepik', 'dribbble', 'artstation', 'unsplash', 'pexels', 'pixabay', 'flickr', 'adobestock', 'shutterstock', 'vecteezy', 'envato', 'awwwards', 'flaticon', 'canva', 'magnific', 'freeimages', 'nohat', 'stockvault', 'freerange', 'logowik', 'iconape', 'pngwing', 'pngegg', 'pngtree', 'arabsstock'];
 const isDesk = () => !!(window.msaDesktop && window.msaDesktop.webview);
 const siteList = () => conn.all.filter(x => SITE_IDS.includes(x.id) && !conn.state().off[x.id]);
 const siteHref = (x, q) => x.url(enc(q || ''), {});
@@ -126,12 +126,30 @@ function bodySites(b){
   const desk = isDesk(), site = list.find(x => x.id === cur.site);
   b.innerHTML = '<div class="ex-search"><input type="text" dir="auto" data-ex-q value="' + esc(cur.q) + '" placeholder="' + esc(T('اكتب ما تبحث عنه ثم اختار الموقع', 'Type what you are after, then pick a site')) + '"><button class="btn primary" data-ex="site-go">' + I('search', 'sm') + '<span>' + esc(T('بحث', 'Search')) + '</span></button></div>' +
     '<div class="ex-srcs">' + list.map(x => '<button class="ex-src ' + (cur.site === x.id ? 'on' : '') + '" data-ex-site="' + x.id + '" style="--c:' + x.c + '"><i></i>' + esc(x.name) + '</button>').join('') + '</div>' +
+    gmBar(desk) +
     (desk
       ? '<div class="ex-web"><div class="ex-wbar" dir="ltr"><button class="icon-btn sm" data-ex="wv-back" title="Back">' + I('arrow-l', 'sm') + '</button><button class="icon-btn sm" data-ex="wv-fwd" title="Forward">' + I('arrow-r', 'sm') + '</button><button class="icon-btn sm" data-ex="wv-reload" title="Reload">' + I('repeat', 'sm') + '</button><span class="ex-wurl" id="exWurl"></span><button class="icon-btn sm" data-ex="wv-ext" title="' + esc(T('افتح في المتصفح', 'Open in browser')) + '">' + I('external', 'sm') + '</button></div>' +
         '<webview id="exWv" class="ex-wv" partition="persist:msa-sites" allowpopups src="about:blank"></webview>' +
         '<div class="hint" style="margin-top:6px">' + esc(T('كليك يمين على أي صورة ← «تثبيت في هويتي» تحفظها في المشروع وتثبّتها في الهوية. تسجيل دخولك في المواقع بيتحفظ على جهازك.', 'Right-click any image → “Pin to my identity” saves it to the project and pins it to the identity. Your site logins stay on this device.')) + '</div></div>'
       : '<div class="ex-nokey" style="margin-top:6px"><b>' + esc(T('افتح الموقع بكلمة بحثك', 'Open the site with your search')) + '</b><span>' + esc(T('اضغط اسم الموقع وهيفتح بنفس كلمة البحث (على الأندرويد جوا التطبيق، وعلى المتصفح في تبويب جديد). انسخ الصورة أو رابطها وارجع الصقها في تبويب «صور وإلهام» (Ctrl+V). والعرض المدمج الكامل للمواقع متاح في نسخة الكمبيوتر.', 'Tap a site and it opens with your search (inside the app on Android, in a new tab on the web). Copy the image or its link and paste it in the “Images & inspiration” tab (Ctrl+V). The full embedded view is in the desktop app.')) + '</span></div>');
   if (desk) wvGo(true);
+}
+function gmBar(desk){
+  const g = conn.gmail(), linked = !!conn.state().gmailLinked;
+  if (!g) return '<div class="ex-gm"><span class="ex-gmi">' + I('mail', 'sm') + '</span><input type="email" dir="ltr" data-ex-gm placeholder="' + esc(T('جيميلك للتسجيل في المواقع (name@gmail.com)', 'Your Gmail for signing in (name@gmail.com)')) + '"><button class="btn sm primary" data-ex="gm-save">' + esc(T('حفظ', 'Save')) + '</button></div>';
+  return '<div class="ex-gm"><span class="ex-gmi">' + I('mail', 'sm') + '</span><b dir="ltr" class="grow">' + esc(g) + '</b>' + (desk ? '<span class="ex-gms ' + (linked ? 'on' : '') + '">' + esc(linked ? T('مربوط بجوجل ✔', 'Linked to Google ✔') : T('لسه مش مربوط', 'Not linked yet')) + '</span><button class="btn sm' + (linked ? '' : ' primary') + '" data-ex="gm-link">' + esc(linked ? T('إعادة الربط', 'Re-link') : T('ربط الجيميل', 'Link Gmail')) + '</button><button class="btn sm" data-ex="gm-fill">' + esc(T('املا الإيميل', 'Fill email')) + '</button>' : '') + '<button class="btn sm" data-ex="gm-copy">' + I('copy', 'sm') + '</button><button class="btn sm ghost" data-ex="gm-edit">' + I('pencil', 'sm') + '</button></div>';
+}
+async function gmAct(a){
+  const g = conn.gmail();
+  if (a === 'gm-save') { const v = ($('[data-ex-gm]', cur.root) || {}).value; if (!conn.setGmail(v) || !conn.gmail()) { MSA.toast(T('اكتب إيميل صحيح', 'Enter a valid email'), 'err'); return; } drawBody(); return; }
+  if (a === 'gm-edit') { conn.setGmail(''); drawBody(); return; }
+  if (a === 'gm-copy') { try { await navigator.clipboard.writeText(g); MSA.toast(T('اتنسخ الإيميل', 'Email copied'), 'ok'); } catch (e) { MSA.toast(T('تعذّر النسخ', 'Could not copy'), 'err'); } return; }
+  const wv = wvEl(); if (!wv) return;
+  if (a === 'gm-link') { try { wv.loadURL('https://accounts.google.com/ServiceLogin?service=mail&continue=' + encodeURIComponent('https://myaccount.google.com/') + (g ? '&Email=' + encodeURIComponent(g) : '')); } catch (e) {} MSA.toast(T('سجّل دخولك بجوجل مرة واحدة هنا — بيفضل محفوظ على جهازك', 'Sign in to Google once here — it stays saved on this device'), 'ok', 4500); return; }
+  if (a === 'gm-fill') {
+    const js = '(function(e){var i=document.querySelectorAll(\'input[type=email],input[name*=mail i],input[id*=mail i],input[autocomplete=username],input[name=username]\'),f=null;for(var k=0;k<i.length;k++){if(i[k].offsetParent!==null){f=i[k];break}}if(!f)return 0;var s=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,\'value\').set;s.call(f,e);f.dispatchEvent(new Event(\'input\',{bubbles:true}));f.dispatchEvent(new Event(\'change\',{bubbles:true}));f.focus();return 1})(' + JSON.stringify(g) + ')';
+    try { const r = await wv.executeJavaScript(js); MSA.toast(r ? T('اتملا الإيميل', 'Email filled') : T('مفيش خانة إيميل ظاهرة في الصفحة', 'No visible email field on this page'), r ? 'ok' : 'err'); } catch (e) { MSA.toast(T('تعذّر الملء', 'Could not fill'), 'err'); }
+  }
 }
 function wvEl(){ return cur.root && $('#exWv', cur.root); }
 function wvGo(first){
@@ -142,6 +160,8 @@ function wvGo(first){
   if (!wv.__wired) {
     wv.__wired = true;
     const show = () => { const u = $('#exWurl', cur.root); try { cur.siteUrl = wv.getURL(); cur.siteUrlFor = cur.site; if (u) u.textContent = cur.siteUrl; } catch (e) {} };
+    const gl = () => { try { const u = new URL(wv.getURL()); if (u.hostname === 'myaccount.google.com' && !conn.state().gmailLinked) { conn.state().gmailLinked = true; MSA.save(); const bar = $('.ex-gm', cur.root); if (bar) bar.outerHTML = gmBar(true); MSA.toast(T('اتربط حساب جوجل ✔ — جرّب «Continue with Google» في أي موقع', 'Google account linked ✔ — try “Continue with Google” on any site'), 'ok', 4500); } } catch (e) {} };
+    wv.addEventListener('did-navigate', gl);
     wv.addEventListener('did-navigate', show); wv.addEventListener('did-navigate-in-page', show);
     wv.addEventListener('did-fail-load', ev => { if (ev.errorCode !== -3 && ev.isMainFrame) { const u = $('#exWurl', cur.root); if (u) u.textContent = T('تعذّر التحميل — تأكد من الإنترنت', 'Could not load — check your internet'); } });
   }
@@ -354,6 +374,7 @@ async function onClick(e){
   const b = e.target.closest('[data-ex]'); if (!b) return; const a = b.dataset.ex, it = b.dataset.i != null ? cur.items[+b.dataset.i] : null;
   if (a === 'site-go') { const q = ($('[data-ex-q]', cur.root) || {}).value; if (q != null) cur.q = q.trim(); const x = siteList().find(z => z.id === cur.site); if (!x) return; cur.siteFresh = true; if (isDesk()) wvGo(false); else MSA.openLink(siteHref(x, cur.q)); }
   else if (a.slice(0, 3) === 'wv-') wvCmd(a.slice(3));
+  else if (a.slice(0, 3) === 'gm-') gmAct(a);
   else if (a === 'search') { if (cur.tab === 'icons') runIcons(); else run(true); }
   else if (a === 'more') run(false);
   else if (a === 'view' && it) view(it);

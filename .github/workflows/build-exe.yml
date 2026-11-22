@@ -124,7 +124,14 @@ jobs:
           }
           app.on('web-contents-created', (_e, contents) => {
             if (contents.getType() === 'webview') {
-              contents.setWindowOpenHandler(({ url }) => { if (/^https?:/i.test(url)) contents.loadURL(url); return { action: 'deny' }; });
+              /* look like normal Chrome: Google and some sites refuse sign-in from a browser that says "Electron" */
+              try { contents.setUserAgent(contents.getUserAgent().replace(/\sElectron\/\S+/i, '').replace(/\smy-smart-assistant\/\S+/i, '')); } catch (e) {}
+              /* sign-in popups ("Continue with Google/Apple/Facebook") must be real child windows so the site can talk back to them; everything else stays in the same view */
+              contents.setWindowOpenHandler(({ url }) => {
+                if (/^https:\/\/([a-z0-9-]+\.)*(google|apple|facebook|microsoft|live|adobe|github)\.(com|net)\//i.test(url)) return { action: 'allow', overrideBrowserWindowOptions: { width: 520, height: 700, autoHideMenuBar: true, webPreferences: { nodeIntegration: false, contextIsolation: true } } };
+                if (/^https?:/i.test(url)) contents.loadURL(url);
+                return { action: 'deny' };
+              });
               contents.on('context-menu', (_ev, params) => {
                 const items = [];
                 if (params.mediaType === 'image' && params.srcURL) {

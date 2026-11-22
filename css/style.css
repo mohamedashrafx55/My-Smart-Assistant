@@ -1678,3 +1678,4 @@ html[data-motion=off] *,html[data-motion=off] *::before,html[data-motion=off] *:
 
 .rt-tab{display:inline-flex;align-items:center;gap:4px}.rt-nm{max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rt-hint{margin:2px 0 8px}
 .mcol{border-inline-start:5px solid var(--mcol)!important}.mfr{box-shadow:inset 0 0 0 2px var(--mcol);background:color-mix(in srgb,var(--mcol) 10%,var(--card,transparent))}tr.mcol>td:first-child{border-inline-start:5px solid var(--mcol)}tr.mfr>td{background:color-mix(in srgb,var(--mcol) 12%,transparent)}
+.ex-gm{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0;padding:8px 10px;border:1px dashed var(--line);border-radius:12px}.ex-gm input{flex:1;min-width:160px}.ex-gmi{display:grid;place-items:center;color:var(--accent)}.ex-gms{font-size:12px;color:var(--muted)}.ex-gms.on{color:#22a06b}

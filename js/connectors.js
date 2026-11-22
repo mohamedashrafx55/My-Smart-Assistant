@@ -27,6 +27,17 @@ const LINKS = [
   { id: 'shutterstock', name: 'Shutterstock', c: '#ee2b24', sc: ['imagestyle', 'mockups'], url: q => 'https://www.shutterstock.com/search/' + q.replace(/%20/g, '-') },
   { id: 'vecteezy', name: 'Vecteezy', c: '#fe6e00', sc: ['icons', 'imagestyle', 'templates', 'mockups'], url: q => 'https://www.vecteezy.com/free-vector/' + q.replace(/%20/g, '-') },
   { id: 'envato', name: 'Envato Elements', c: '#82b541', sc: ['templates', 'mockups', 'motion'], url: q => 'https://elements.envato.com/all-items/' + q.replace(/%20/g, '-') },
+  { id: 'magnific', name: 'Magnific', c: '#7c3aed', sc: ['imagestyle', 'mockups', 'main'], url: () => 'https://magnific.ai/' },
+  { id: 'freeimages', name: 'Freeimages', c: '#f26522', sc: ['mood', 'imagestyle'], url: q => 'https://www.freeimages.com/search/' + q.replace(/%20/g, '-') },
+  { id: 'nohat', name: 'Nohat', c: '#f5c400', sc: ['icons', 'imagestyle', 'logo'], url: q => 'https://www.nohat.cc/search?q=' + q },
+  { id: 'stockvault', name: 'Stockvault', c: '#2f80ed', sc: ['mood', 'imagestyle', 'mockups'], url: q => 'https://www.stockvault.net/free-photos/' + q.replace(/%20/g, '-') + '/' },
+  { id: 'freerange', name: 'Freerange', c: '#e0342b', sc: ['mood', 'imagestyle'], url: q => 'https://freerangestock.com/search.php?search=' + q },
+  { id: 'logowik', name: 'Logowik', c: '#d62828', sc: ['logo', 'icons', 'identity'], url: q => 'https://logowik.com/?s=' + q },
+  { id: 'iconape', name: 'Icon APE', c: '#2ecc9a', sc: ['icons', 'logo'], url: q => 'https://iconape.com/?s=' + q },
+  { id: 'pngwing', name: 'PNGWing', c: '#1d6fb8', sc: ['icons', 'imagestyle', 'mockups'], url: q => 'https://www.pngwing.com/en/search?q=' + q },
+  { id: 'pngegg', name: 'PNGEgg', c: '#e91e63', sc: ['icons', 'imagestyle', 'mockups'], url: q => 'https://www.pngegg.com/en/search?q=' + q },
+  { id: 'pngtree', name: 'PngTree', c: '#27ae60', sc: ['icons', 'imagestyle', 'templates', 'mockups'], url: q => 'https://pngtree.com/so/' + q.replace(/%20/g, '-') },
+  { id: 'arabsstock', name: 'Arabsstock', c: '#1e3a5f', sc: ['imagestyle', 'templates', 'mockups'], url: q => 'https://arabsstock.com/en/search?q=' + q },
   { id: 'awwwards', name: 'Awwwards', c: '#222222', sc: ['idea', 'mood'], url: q => 'https://www.awwwards.com/websites/?text=' + q },
   { id: 'youtube', name: 'YouTube', c: '#ff0000', sc: ['*'], url: q => 'https://www.youtube.com/results?search_query=' + q + '%20tutorial' }
 ];
@@ -40,6 +51,8 @@ const conn = MSA.conn = {
   state: st,
   all: LINKS,
   live: () => st().live !== false,
+  gmail: () => String(st().gmail || ''),
+  setGmail(v){ v = String(v || '').trim().slice(0, 120); if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return false; st().gmail = v; if (!v) delete st().gmailLinked; MSA.save(); return true; },
   /* enabled connector links for a step scope + search text */
   links(scope, text, ctx){
     const q = encodeURIComponent(text || '');
@@ -76,6 +89,9 @@ MSA.connHTML = function(){
       '<div class="field"><label class="f">' + U.esc(T('الاسم', 'Name')) + '</label><input type="text" id="cnName" placeholder="Awwwards"></div>' +
       '<div class="field"><label class="f">' + U.esc(T('رابط البحث (استخدم {q} مكان كلمة البحث)', 'Search URL (use {q} where the search word goes)')) + '</label><input type="text" id="cnUrl" dir="ltr" placeholder="https://www.awwwards.com/search/?text={q}"></div>' +
       '<button class="btn sm" id="cnAdd">' + I('plus', 'sm') + U.esc(T('إضافة', 'Add')) + '</button></div>' +
+    '<div class="subsec" style="margin-top:10px"><div class="f-title">' + I('mail', 'sm') + U.esc(T('حساب الجيميل للتسجيل في المواقع', 'Gmail account for signing in to sites')) + '</div>' +
+      '<div class="field"><input type="email" id="cnGmail" dir="ltr" placeholder="name@gmail.com" value="' + U.esc(c.gmail || '') + '"></div>' +
+      '<div class="hint">' + U.esc(T('بيتحفظ على جهازك بس. في «مواقع مشهورة» تقدر تربطه بجوجل مرة واحدة (على الكمبيوتر) وبعدها تدخل أي موقع بزرار «Continue with Google». كلمة السر عمرها ما بتتحفظ.', 'Stored on this device only. In “Popular sites” you can link it to Google once (desktop) and then use “Continue with Google” on any site. Your password is never stored.')) + '</div></div>' +
     '<label class="row" style="margin:12px 0 4px;cursor:pointer"><input type="checkbox" class="cb" id="cnLive" ' + (c.live !== false ? 'checked' : '') + '><span>' + U.esc(T('خدمات مباشرة: بحث أيقونات حي (Iconify) ومعاينة الخطوط (Google Fonts)', 'Live services: live icon search (Iconify) and font previews (Google Fonts)')) + '</span></label>' +
     '<div class="hint">' + U.esc(T('عند التفعيل تتصل الأداة بهذه الخدمات لجلب الأيقونات والخطوط فقط (كلمات البحث، بدون صورك أو ملفاتك).', 'When on, the app contacts these services only to fetch icons and fonts (search words only — never your images or files).')) + '</div>';
 };
@@ -89,6 +105,7 @@ MSA.wireConn = function(root, redraw){
     if (!/^https?:\/\//i.test(u)) u = 'https://' + u; c.custom.push({ id: U.uid('c'), name: n, url: u }); MSA.save(); redraw();
   };
   $('#cnLive', box).onchange = e => { c.live = e.target.checked; MSA.save(); };
+  $('#cnGmail', box).onchange = e => { if (!MSA.conn.setGmail(e.target.value)) { MSA.toast(T('إيميل غير صحيح', 'Invalid email'), 'err'); e.target.value = MSA.conn.gmail(); } else MSA.toast(T('اتحفظ الإيميل ✔', 'Email saved ✔'), 'ok'); };
 };
 })();
 
