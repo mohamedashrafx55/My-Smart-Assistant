@@ -297,6 +297,16 @@ MSA.render = function(animate){
   MSA.views[MSA.view].render(host);
   MSA.hydrateAtts(host);
 };
+/* right-click on the empty page area (padding / below the content) behaves like right-click on the view's own empty space */
+(function(){
+  const v = document.getElementById('view'); if (!v || v._rcFwd) return; v._rcFwd = 1;
+  v.addEventListener('contextmenu', e => {
+    if (e.target !== v || e.defaultPrevented) return;
+    const host = v.firstElementChild; if (!host) return;
+    const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY, screenX: e.screenX, screenY: e.screenY, button: 2, buttons: 2 });
+    host.dispatchEvent(ev); if (ev.defaultPrevented) e.preventDefault();
+  });
+})();
 /* keepScroll=false means "navigated inside the view": animate and start from the top */
 MSA.rerender = function(keepScroll){
   const v = $('#view'), top = v.scrollTop;

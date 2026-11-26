@@ -20,7 +20,7 @@ const S = {
   review: ['مراجعة العميل', 'Client review', 'v'], revise: ['التعديلات', 'Revisions', 'v'], proof: ['بروفة / اختبار', 'Proof / test', 'v'], approve: ['الاعتماد', 'Approval', 'v'],
   files: ['الملفات النهائية', 'Final files', 'd'], deliver: ['التسليم', 'Delivery', 'd'], export: ['التصدير', 'Export', 'd'], publish: ['النشر', 'Publish', 'd'], guide: ['كتيب الاستخدام', 'Usage guide', 'd'], handoff: ['تسليم للمطوّر', 'Developer handoff', 'd']
 };
-const X = (a, e, p) => [a, e, p || 'p'];   /* inline stage */
+const X = (a, e, p, n) => [a, e, p || 'p', n || null];   /* inline stage */
 
 /* [id, category, icon, [ar,en], [descAr,descEn], rows] */
 const TYPES = [
@@ -69,13 +69,26 @@ const TYPES = [
   /* ---------- other ---------- */
   ['retouch', 'oth', 'camera', ['معالجة صور / ريتاتش', 'Photo retouching'], ['تنظيف وتلوين ودمج', 'Clean-up, colour, composite'], [['brief'], [X('فحص الصورة الأصلية', 'Inspect the original', 'r')], [X('تنظيف وإزالة', 'Clean-up', 'p')], [X('ضبط اللون والإضاءة', 'Colour & light', 'p')], [X('تفاصيل نهائية', 'Finishing touches', 'p')], ['review'], ['files'], ['deliver']]],
   ['illustration', 'oth', 'pencil', ['رسم / إلستريشن', 'Illustration'], ['من الاسكتش للتلوين', 'Sketch to colour'], [['brief'], ['refs', 'mood'], ['sketch'], [X('رسم الخطوط', 'Line art', 'p')], [X('التلوين', 'Colouring', 'p')], [X('الإضاءة والتفاصيل', 'Light & detail', 'p')], ['review'], ['files'], ['deliver']]],
+  ['showcase', 'oth', 'layers', ['Presentation عرض مشروع (Behance)', 'Project showcase presentation (Behance)'], ['عرض المشروع بشكل احترافي: غلاف وبانر ونبذة وهوية وتطبيقات وحركة وخاتمة', 'Showcase a project: cover, hero, overview, identity, mockups, motion, outro'],
+    [[X('نبذة عن المشروع (Brief)', 'Project overview', 'r', ['المشكلة والهدف في 3-4 أسطر: مين العميل، إيه المشكلة، إيه هدف التصميم. وبعدها دورك ومسؤولياتك والأدوات المستخدمة.', 'Challenge & goal in 3-4 lines: who the client is, the problem, the goal. Then your role, deliverables and tools.'])],
+     ['mood', X('اسكتشات وWireframes', 'Sketches & wireframes', 'c', ['مسودات الرسم اليدوي للشعار أو التخطيط المبدئي للواجهات. القسم ده اختياري وبيوري إن تصميمك مبني على تفكير.', 'Hand sketches of the logo or early screen layouts. Optional: shows the design is built on thinking.'])],
+     [X('بناء الشعار (Grid)', 'Logo construction / grid', 'c', ['النسب الهندسية للشعار ونسخه: أفقي، رأسي، أيقونة.', 'Geometric proportions of the logo and its versions: horizontal, vertical, icon.']), 'colors', 'fonts', 'icons'],
+     ['mockups', X('الحركة والتفاعل', 'Motion & interaction', 'p', ['GIF أو فيديو قصير مدمج يعرض حركة الشعار أو تفاعل الأزرار والتنقل. بيكسر ملل الصور الثابتة ويزوّد مدة بقاء الزائر.', 'Embedded GIF or short video showing logo motion or button/navigation interaction; breaks static monotony and keeps visitors longer.'])],
+     [X('صورة الغلاف (Cover)', 'Cover image', 'p', ['أهم عنصر لجذب النقرات. المقاس المثالي 808×632 بكسل (أو مضاعفاتها بنفس النسبة). نظيفة وواضحة وتُظهر أفضل لقطة في المشروع (الشعار أو الواجهة الأساسية) بدون ازدحام نصي.', 'The key click-getter. Ideal size 808×632 px (or multiples). Clean and clear, showing the best shot, no text clutter.']), X('البانر الافتتاحي (Hero)', 'Hero / intro banner', 'p', ['أول صورة يراها الزائر: لازم تخطف الانتباه في أول 3 ثوانٍ. Mockup واقعي عالي الجودة فيه اسم المشروع وTagline قصير وسنة التنفيذ.', 'First image the visitor sees: grab attention in 3 seconds. High-quality realistic mockup with project name, short tagline and year.'])],
+     [X('الخاتمة والتواصل (CTA)', 'Outro & call to action', 'p', ['شكر الزائر على المشاهدة، روابط حساباتك وإيميلك، ودعوة صريحة للعمل معك (Available for freelance projects).', 'Thank the visitor, add your links and email, and a clear call to work with you (Available for freelance projects).'])],
+     ['review'], ['publish']],
+    { mood: ['الصور والأفكار اللي استلهمت منها روح المشروع (لوحة الإلهام).', 'Images and ideas that inspired the project (moodboard).'],
+      colors: ['الألوان الأساسية والثانوية مع الأكواد (HEX / RGB).', 'Primary and secondary colours with codes (HEX / RGB).'],
+      fonts: ['أسماء الخطوط وأوزانها وتطبيقاتها في العناوين والنصوص.', 'Font names, weights and how they are used in headings and body.'],
+      icons: ['أي عناصر رسومية أو أنماط (Patterns) اتصممت خصيصًا للمشروع.', 'Any graphic elements or patterns designed for the project.'],
+      mockups: ['الجزء الأهم للإقناع. هويات: كروت، أوراق رسمية، تغليف، لافتات، ملابس، سوشيال. مواقع وتطبيقات: الشاشات على أجهزة مختلفة، User Flow، Dark Mode لو موجود.', 'The most convincing part. Branding: cards, stationery, packaging, signage, apparel, social. UI/UX: screens on devices, user flow, dark mode if any.'] }],
   ['mockup-pack', 'oth', 'layers', ['موك أب / عرض أعمال', 'Mockups / portfolio showcase'], ['عرض الأعمال بشكل احترافي', 'Present work professionally'], [['brief'], ['assets'], [X('اختيار الموك أب', 'Pick mockups', 'c')], ['mockups'], [X('تقديم Behance / PDF', 'Behance / PDF presentation', 'p')], ['review'], ['deliver']]]
 ];
 const CATS = [['all', 'الكل', 'All'], ['id', 'الهوية', 'Identity'], ['print', 'مطبوعات', 'Print'], ['dig', 'ديجيتال', 'Digital'], ['vid', 'فيديو وموشن', 'Video & motion'], ['oth', 'أخرى', 'Other']];
 
 function stageOf(x){
   if (typeof x === 'string') { const d = S[x]; if (d) return { k: x, ar: d[0], en: d[1], ph: d[2], key: null }; return { k: x, ar: x, en: x, ph: KPH[x] || 'p', key: KEYS.includes(x) ? x : null }; }
-  return { k: null, ar: x[0], en: x[1], ph: x[2] || 'p', key: null };
+  return { k: null, ar: x[0], en: x[1], ph: x[2] || 'p', key: null, note: x[3] || null };
 }
 /* resolve a name that might be a built-in step key with its own translation */
 function resolve(x){ const o = stageOf(x); if (typeof x === 'string' && KEYS.includes(x)) { o.key = x; o.ph = KPH[x]; } return o; }
@@ -101,7 +114,8 @@ function make(def){
     const rid = [];
     row.forEach((x, ci) => {
       const o = resolve(x), id = U.uid('s');
-      steps.push({ id, key: o.key, title: o.key ? null : T(o.ar, o.en), done: false, note: '', atts: [], children: [] });
+      const nt = o.note || (o.key && def[6] && def[6][o.key]) || null;
+      steps.push({ id, key: o.key, title: o.key ? null : T(o.ar, o.en), done: false, note: nt ? T(nt[0], nt[1]) : '', atts: [], children: [] });
       pos[id] = [PADX + Math.round(((maxN - row.length) / 2 + ci) * COL / 10) * 10, PADY + ri * ROW];
       col[id] = PH[o.ph][0]; rid.push(id);
     });
