@@ -218,6 +218,14 @@ function renderVideos(host){
 }
 
 function itemFrom(el){ const c = el.closest('[data-kind]'); return c ? { k: c.dataset.kind, id: c.dataset.id, el: c } : null; }
+function pickFolder(items){
+  const fids = items.filter(i => i.k === 'f').map(i => i.id), bad = id => id && fids.some(f => f === id || isDesc(id, f));
+  const rows = []; const walk = (pid, d) => kids(pid).forEach(f => { if (bad(f.id)) return; rows.push([f.id, f.name, d]); walk(f.id, d + 1); }); walk(null, 0);
+  const body = '<div class="mvlist" style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto"><button class="btn" data-mv="">' + I('folder-open', 'sm') + '<span>' + U.esc(MSA.T('الرئيسية', 'Top level')) + '</span></button>' +
+    rows.map(r => '<button class="btn" data-mv="' + r[0] + '" style="justify-content:flex-start;padding-inline-start:' + (12 + r[2] * 18) + 'px">' + I('folder', 'sm') + '<span>' + U.esc(r[1]) + '</span></button>').join('') + '</div>';
+  MSA.modal({ title: MSA.T('نقل ' + items.length + ' عنصر إلى…', 'Move ' + items.length + ' item(s) to…'), footer: false, body,
+    onMount: (el, api) => { el.addEventListener('click', e => { const b = e.target.closest('[data-mv]'); if (!b) return; api.close(); moveItems(items, b.dataset.mv || null); }); } });
+}
 function bind(host){
   const toggleSel = it => { const k = it.k + ':' + it.id; sel.has(k) ? sel.delete(k) : sel.add(k); MSA.rerender(); };
   const itemMenu = (it, x, y) => {
@@ -229,6 +237,7 @@ function bind(host){
     if (one) m.push({ icon: 'pencil', label: t('rename'), onClick: () => renameItem(it.k, it.id) });
     m.push({ icon: 'copy', label: t('copy'), onClick: () => setClip('copy', items) }, { icon: 'scissors', label: t('cut'), onClick: () => setClip('cut', items) });
     if (clip && isF && one) m.push({ icon: 'paste', label: t('pasteHere'), onClick: () => pasteInto(it.id) });
+    m.push({ icon: 'folder-open', label: MSA.T('نقل إلى…', 'Move to…'), onClick: () => pickFolder(items) });
     m.push({ icon: 'palette', label: MSA.T('تلوين', 'Colour'), onClick: () => colorize(items) });
     if (!isF && one) m.push({ icon: 'external', label: t('openLink'), onClick: () => MSA.openLink(L().videos.find(v => v.id === it.id).url) });
     m.push('-', { icon: 'trash', label: t('delete'), danger: true, onClick: () => deleteItems(items) });
@@ -256,7 +265,19 @@ function bind(host){
     if (e.ctrlKey || e.metaKey || e.shiftKey || selMode) { toggleSel(it); return; }
     if (it.k === 'f') enter(it.id); else openVideo(L().videos.find(v => v.id === it.id));
   });
-  host.addEventListener('contextmenu', e => { const it = itemFrom(e.target); if (!it) return; e.preventDefault(); itemMenu(it, e.clientX, e.clientY); });
+  const bgMenu = (x, y) => {
+    const m = [];
+    if (!favMode()) {
+      m.push({ icon: 'folder-plus', label: t('newFolder'), onClick: newFolder }, { icon: 'link', label: MSA.T('إضافة لينك', 'Add link'), onClick: addLinks });
+      if (clip) m.push({ icon: 'paste', label: t('pasteHere'), onClick: () => pasteInto(curId()) });
+      m.push('-');
+    }
+    m.push({ icon: 'checks', label: MSA.T('تحديد الكل', 'Select all'), onClick: () => { const k = favMode() ? [] : kids(curId()), v = favMode() ? L().videos.filter(x => x.fav) : vids(curId()); k.forEach(f => sel.add('f:' + f.id)); v.forEach(x => sel.add('v:' + x.id)); selMode = true; MSA.rerender(); } });
+    if (sel.size) m.push({ icon: 'x', label: MSA.T('إلغاء التحديد', 'Clear selection'), onClick: () => { sel.clear(); selMode = false; MSA.rerender(); } });
+    m.push({ icon: 'repeat', label: MSA.T('تحديث', 'Refresh'), onClick: () => MSA.rerender() });
+    MSA.ctx(x, y, m);
+  };
+  host.addEventListener('contextmenu', e => { if (e.target.closest('input,select,textarea,[contenteditable=true],.ctx')) return; const it = itemFrom(e.target); e.preventDefault(); if (it) itemMenu(it, e.clientX, e.clientY); else bgMenu(e.clientX, e.clientY); });
   const lq = $('#lq', host); if (lq) lq.addEventListener('input', e => { query = e.target.value; const pos = e.target.selectionStart; MSA.rerender(false); const n = $('#lq'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } });
   const ls = $('#lsort', host); if (ls) ls.addEventListener('change', e => { sort = e.target.value; MSA.rerender(); });
   /* long-press for touch -> context menu */
